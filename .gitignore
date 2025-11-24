@@ -6,6 +6,9 @@ bin/
 *.db
 backups/
 
+# Test data
+test_data/
+
 # IDE
 .vscode/
 .idea/

@@ -9,5 +9,9 @@ echo ===== SerializationUtilTest =====
 java -cp bin backend.test.SerializationUtilTest
 
 echo.
+echo ===== FileManagerTest =====
+java -cp bin backend.test.FileManagerTest
+
+echo.
 echo Testing is complete!
 pause
