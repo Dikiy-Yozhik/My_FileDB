@@ -13,5 +13,9 @@ echo ===== FileManagerTest =====
 java -cp bin backend.test.FileManagerTest
 
 echo.
+echo ===== IndexManagerTest =====
+java -cp bin backend.test.IndexManagerTest
+
+echo.
 echo Testing is complete!
 pause
