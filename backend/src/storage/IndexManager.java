@@ -1,6 +1,7 @@
 package storage;
 
 import exceptions.DatabaseException;
+import model.IndexSlot;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -10,10 +11,6 @@ public class IndexManager implements AutoCloseable {
     private FileManager fileManager;
     private Map<Integer, Long> ramIndex; // In-memory копия для скорости
     private boolean isOpen;
-    
-    // Формат файла индекса
-    private static final int HEADER_SIZE = 16;
-    private static final int SLOT_SIZE = 12; // 4 байта key + 8 байт offset
     
     // Заголовок индекса
     private int capacity;
@@ -49,7 +46,7 @@ public class IndexManager implements AutoCloseable {
         
         // Инициализируем пустые слоты
         for (int i = 0; i < capacity; i++) {
-            writeSlot(i, -1, 0);
+            writeSlot(i, IndexSlot.emptySlot());
         }
         
         ramIndex.clear();
@@ -58,7 +55,7 @@ public class IndexManager implements AutoCloseable {
     
     private void loadIndexFromFile() throws IOException {
         // Читаем заголовок
-        byte[] headerData = fileManager.read(0, HEADER_SIZE);
+        byte[] headerData = fileManager.read(0, RecordFormat.INDEX_HEADER_SIZE);
         ByteBuffer header = ByteBuffer.wrap(headerData);
         
         // Пропускаем сигнатуру и версию
@@ -73,8 +70,8 @@ public class IndexManager implements AutoCloseable {
         ramIndex.clear();
         for (int i = 0; i < capacity; i++) {
             IndexSlot slot = readSlot(i);
-            if (slot.key != -1) {
-                ramIndex.put(slot.key, slot.offset);
+            if (!slot.isEmpty()) {
+                ramIndex.put(slot.getKey(), slot.getOffset());
             }
         }
     }
@@ -99,9 +96,9 @@ public class IndexManager implements AutoCloseable {
         while (attempts < capacity) {
             IndexSlot slot = readSlot(hash);
             
-            if (slot.key == -1) {
+            if (slot.isEmpty()) {
                 // Нашли свободный слот
-                writeSlot(hash, key, offset);
+                writeSlot(hash, new IndexSlot(key, offset));
                 ramIndex.put(key, offset);
                 size++;
                 return;
@@ -138,9 +135,9 @@ public class IndexManager implements AutoCloseable {
         while (attempts < capacity) {
             IndexSlot slot = readSlot(hash);
             
-            if (slot.key == key) {
+            if (slot.getKey() == key) {
                 // Удаляем запись
-                writeSlot(hash, -1, 0);
+                writeSlot(hash, IndexSlot.emptySlot());
                 ramIndex.remove(key);
                 size--;
                 return;
@@ -166,8 +163,8 @@ public class IndexManager implements AutoCloseable {
         while (attempts < capacity) {
             IndexSlot slot = readSlot(hash);
             
-            if (slot.key == key) {
-                writeSlot(hash, key, newOffset);
+            if (slot.getKey() == key) {
+                writeSlot(hash, new IndexSlot(key, newOffset));
                 ramIndex.put(key, newOffset);
                 return;
             }
@@ -193,23 +190,45 @@ public class IndexManager implements AutoCloseable {
         
         // Инициализируем новые пустые слоты
         for (int i = 0; i < capacity; i++) {
-            writeSlot(i, -1, 0);
+            writeSlot(i, IndexSlot.emptySlot());
         }
         
         // Перестраиваем индекс с новой емкостью
         for (Map.Entry<Integer, Long> entry : oldData.entrySet()) {
-            add(entry.getKey(), entry.getValue());
+            addWithoutRehash(entry.getKey(), entry.getValue());
         }
     }
     
+    // Внутренний метод для добавления без проверки рехэширования
+    private void addWithoutRehash(int key, long offset) throws IOException {
+        int hash = hashFunction(key);
+        int attempts = 0;
+        
+        while (attempts < capacity) {
+            IndexSlot slot = readSlot(hash);
+            
+            if (slot.isEmpty()) {
+                writeSlot(hash, new IndexSlot(key, offset));
+                ramIndex.put(key, offset);
+                size++;
+                return;
+            }
+            
+            hash = (hash + 1) % capacity;
+            attempts++;
+        }
+        
+        throw new DatabaseException("INDEX_FULL", "Index is full during rehash");
+    }
+    
     private int hashFunction(int key) {
-        // Самая простая - модуль
-        return key % capacity;
+        // Простая хэш-функция с умножением на простое число
+        return (key * 31) % capacity;
     }
     
     private IndexSlot readSlot(int slotIndex) throws IOException {
-        long offset = HEADER_SIZE + (long) slotIndex * SLOT_SIZE;
-        byte[] slotData = fileManager.read(offset, SLOT_SIZE);
+        long offset = RecordFormat.INDEX_HEADER_SIZE + (long) slotIndex * RecordFormat.INDEX_SLOT_SIZE;
+        byte[] slotData = fileManager.read(offset, RecordFormat.INDEX_SLOT_SIZE);
         ByteBuffer buffer = ByteBuffer.wrap(slotData);
         
         int key = buffer.getInt();
@@ -218,17 +237,17 @@ public class IndexManager implements AutoCloseable {
         return new IndexSlot(key, value);
     }
     
-    private void writeSlot(int slotIndex, int key, long offset) throws IOException {
-        long fileOffset = HEADER_SIZE + (long) slotIndex * SLOT_SIZE;
-        ByteBuffer buffer = ByteBuffer.allocate(SLOT_SIZE);
-        buffer.putInt(key);
-        buffer.putLong(offset);
+    private void writeSlot(int slotIndex, IndexSlot slot) throws IOException {
+        long fileOffset = RecordFormat.INDEX_HEADER_SIZE + (long) slotIndex * RecordFormat.INDEX_SLOT_SIZE;
+        ByteBuffer buffer = ByteBuffer.allocate(RecordFormat.INDEX_SLOT_SIZE);
+        buffer.putInt(slot.getKey());
+        buffer.putLong(slot.getOffset());
         
         fileManager.write(fileOffset, buffer.array());
     }
     
     private void writeHeader() throws IOException {
-        ByteBuffer header = ByteBuffer.allocate(HEADER_SIZE);
+        ByteBuffer header = ByteBuffer.allocate(RecordFormat.INDEX_HEADER_SIZE);
         header.putShort((short) 1); // version
         header.putShort((short) 0); // reserved
         header.putInt(capacity);
@@ -261,17 +280,6 @@ public class IndexManager implements AutoCloseable {
     private void checkOpen() {
         if (!isOpen) {
             throw new DatabaseException("INDEX_NOT_OPEN", "Index is not open");
-        }
-    }
-    
-    // Вспомогательный класс для представления слота индекса
-    private static class IndexSlot {
-        final int key;
-        final long offset;
-        
-        IndexSlot(int key, long offset) {
-            this.key = key;
-            this.offset = offset;
         }
     }
 }

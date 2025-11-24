@@ -1,6 +1,7 @@
 package storage;
 
 import exceptions.DatabaseException;
+import exceptions.FileAccessException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
@@ -20,7 +21,7 @@ public class FileManager implements AutoCloseable {
     private boolean readBufferValid;
     
     private static final int BUFFER_SIZE = 8192; // 8KB
-
+    
     public FileManager(String filePath) {
         this.filePath = filePath;
         this.readBuffer = new byte[BUFFER_SIZE];
@@ -41,13 +42,13 @@ public class FileManager implements AutoCloseable {
                 Files.createDirectories(path.getParent());
                 Files.createFile(path);
             } else {
-                throw new DatabaseException("FILE_NOT_FOUND", "File not found: " + filePath);
+                throw new FileAccessException("File not found", filePath);
             }
         }
         
         // Проверяем права доступа
         if (!Files.isReadable(path) || !Files.isWritable(path)) {
-            throw new DatabaseException("PERMISSION_DENIED", "Insufficient permissions for file: " + filePath);
+            throw new FileAccessException("Insufficient permissions", filePath);
         }
         
         try {
@@ -55,7 +56,7 @@ public class FileManager implements AutoCloseable {
             this.channel = file.getChannel();
             this.isOpen = true;
         } catch (IOException e) {
-            throw new DatabaseException("FILE_ACCESS_ERROR", "Cannot open file: " + filePath, e);
+            throw new FileAccessException("Cannot open file", filePath, e);
         }
     }
     
@@ -80,8 +81,7 @@ public class FileManager implements AutoCloseable {
             }
             
         } catch (IOException e) {
-            throw new DatabaseException("WRITE_ERROR", 
-                "Failed to write " + data.length + " bytes at offset " + offset + " to file: " + filePath, e);
+            throw new FileAccessException("Failed to write data", filePath, e);
         }
     }
     
@@ -108,15 +108,14 @@ public class FileManager implements AutoCloseable {
             int bytesRead = file.read(data);
             
             if (bytesRead != length) {
-                throw new DatabaseException("READ_ERROR",
-                    "Expected to read " + length + " bytes but got " + bytesRead + " at offset " + offset);
+                throw new FileAccessException(
+                    "Expected to read " + length + " bytes but got " + bytesRead, filePath);
             }
             
             return data;
             
         } catch (IOException e) {
-            throw new DatabaseException("READ_ERROR", 
-                "Failed to read " + length + " bytes from offset " + offset + " in file: " + filePath, e);
+            throw new FileAccessException("Failed to read data", filePath, e);
         }
     }
     
@@ -156,8 +155,7 @@ public class FileManager implements AutoCloseable {
             
         } catch (IOException e) {
             readBufferValid = false;
-            throw new DatabaseException("BUFFER_LOAD_ERROR",
-                "Failed to load buffer at offset " + blockOffset + " for file: " + filePath, e);
+            throw new FileAccessException("Failed to load buffer", filePath, e);
         }
     }
     
@@ -184,7 +182,7 @@ public class FileManager implements AutoCloseable {
         try {
             return file.length();
         } catch (IOException e) {
-            throw new DatabaseException("FILE_SIZE_ERROR", "Cannot get file size: " + filePath, e);
+            throw new FileAccessException("Cannot get file size", filePath, e);
         }
     }
     
@@ -195,8 +193,7 @@ public class FileManager implements AutoCloseable {
             // Инвалидируем буфер так как размер файла изменился
             readBufferValid = false;
         } catch (IOException e) {
-            throw new DatabaseException("FILE_RESIZE_ERROR", 
-                "Cannot resize file to " + newSize + " bytes: " + filePath, e);
+            throw new FileAccessException("Cannot resize file", filePath, e);
         }
     }
     
@@ -205,7 +202,7 @@ public class FileManager implements AutoCloseable {
             try {
                 file.getFD().sync(); // Принудительная запись на диск
             } catch (IOException e) {
-                throw new DatabaseException("FLUSH_ERROR", "Cannot flush file: " + filePath, e);
+                throw new FileAccessException("Cannot flush file", filePath, e);
             }
         }
     }

@@ -4,6 +4,7 @@ echo Compilation of My_FileDB...
 mkdir bin 2>nul
 
 javac -d bin ^
+      backend\src\core\*.java ^
       backend\src\exceptions\*.java ^
       backend\src\model\*.java ^
       backend\src\storage\*.java ^

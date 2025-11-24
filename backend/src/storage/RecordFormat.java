@@ -22,6 +22,15 @@ public class RecordFormat {
     // Кодировки
     public static final String STRING_ENCODING = "UTF-8";
     
+    // Формат файла meta.db
+    public static final int META_FILE_SIZE = 22;
+    public static final String DATABASE_SIGNATURE = "MFDB";
+    public static final short DATABASE_VERSION = 1;
+    
+    // Формат файла index.db
+    public static final int INDEX_HEADER_SIZE = 16;
+    public static final int INDEX_SLOT_SIZE = 12; // 4 bytes key + 8 bytes offset
+    
     private RecordFormat() {
         // Utility class
     }

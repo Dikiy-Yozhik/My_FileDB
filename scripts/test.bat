@@ -17,5 +17,9 @@ echo ===== IndexManagerTest =====
 java -cp bin backend.test.IndexManagerTest
 
 echo.
+echo ===== DatabaseEngineTest =====
+java -cp bin backend.test.DatabaseEngineTest
+
+echo.
 echo Testing is complete!
 pause
