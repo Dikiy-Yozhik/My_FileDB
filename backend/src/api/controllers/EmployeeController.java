@@ -4,6 +4,7 @@ import api.dto.EmployeeRequest;
 import api.dto.EmployeeResponse;
 import api.dto.ErrorResponse;
 import api.dto.SuccessResponse;
+import api.dto.UserSession;
 import core.DatabaseEngine;
 import exceptions.DatabaseException;
 import model.Employee;
@@ -22,8 +23,12 @@ public class EmployeeController {
         this.databaseController = databaseController;
     }
     
-    public String getAllEmployees() {
+    public String getAllEmployees(UserSession session) {
         try {
+            if (!session.canViewEmployees()) {
+                return "{\"success\":false,\"error\":\"ACCESS_DENIED\",\"message\":\"Недостаточно прав для просмотра сотрудников\"}";
+            }
+            
             checkDatabaseLoaded();
             DatabaseEngine db = databaseController.getCurrentDatabase();
             
@@ -45,8 +50,12 @@ public class EmployeeController {
         }
     }
     
-    public String getEmployeeById(String idParam) {
+    public String getEmployeeById(String idParam, UserSession session) {
         try {
+            if (!session.canViewEmployees()) {
+                return "{\"success\":false,\"error\":\"ACCESS_DENIED\",\"message\":\"Недостаточно прав для просмотра сотрудников\"}";
+            }
+            
             checkDatabaseLoaded();
             
             int id = parseId(idParam);
@@ -72,8 +81,11 @@ public class EmployeeController {
         }
     }
     
-    public String createEmployee(String requestBody) {
+    public String createEmployee(String requestBody, UserSession session) {
         try {
+            if (!session.canCreateEmployee()) {
+                return "{\"success\":false,\"error\":\"ACCESS_DENIED\",\"message\":\"Недостаточно прав для добавления сотрудников. Требуется роль: Администратор или Оператор\"}";
+            }
             checkDatabaseLoaded();
             
             // Простой парсинг JSON вручную
@@ -98,8 +110,11 @@ public class EmployeeController {
         }
     }
     
-    public String updateEmployee(String idParam, String requestBody) {
+    public String updateEmployee(String idParam, String requestBody, UserSession session) {
         try {
+            if (!session.canUpdateEmployee()) {
+                return "{\"success\":false,\"error\":\"ACCESS_DENIED\",\"message\":\"Недостаточно прав для добавления сотрудников. Требуется роль: Администратор или Оператор\"}";
+            }
             checkDatabaseLoaded();
             
             int id = parseId(idParam);
@@ -133,8 +148,11 @@ public class EmployeeController {
         }
     }
     
-    public String deleteEmployee(String idParam) {
+    public String deleteEmployee(String idParam, UserSession session) {
         try {
+            if (!session.canDeleteEmployee()) {
+                return "{\"success\":false,\"error\":\"ACCESS_DENIED\",\"message\":\"Недостаточно прав для добавления сотрудников. Требуется роль: Администратор или Оператор\"}";
+            }
             checkDatabaseLoaded();
             
             int id = parseId(idParam);
@@ -159,8 +177,11 @@ public class EmployeeController {
         }
     }
     
-    public String searchEmployees(Map<String, String> queryParams) {
+    public String searchEmployees(Map<String, String> queryParams, UserSession session) {
         try {
+            if (!session.canSearchEmployees()) {
+                return "{\"success\":false,\"error\":\"ACCESS_DENIED\",\"message\":\"Недостаточно прав для добавления сотрудников. Требуется роль: Администратор или Оператор\"}";
+            }
             checkDatabaseLoaded();
             DatabaseEngine db = databaseController.getCurrentDatabase();
             
@@ -194,8 +215,12 @@ public class EmployeeController {
         }
     }
     
-    public String deleteEmployeesByCriteria(Map<String, String> queryParams) {
+    public String deleteEmployeesByCriteria(Map<String, String> queryParams, UserSession session) {
         try {
+            if (!session.canDeleteEmployee()) {
+                return "{\"success\":false,\"error\":\"ACCESS_DENIED\",\"message\":\"Недостаточно прав для удаления сотрудников. Требуется роль: Администратор или Оператор\"}";
+            }
+            
             checkDatabaseLoaded();
             DatabaseEngine db = databaseController.getCurrentDatabase();
             

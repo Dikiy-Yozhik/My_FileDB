@@ -2,6 +2,7 @@ package api.controllers;
 
 import api.dto.ErrorResponse;
 import api.dto.SuccessResponse;
+import api.dto.UserSession;
 import core.DatabaseEngine;
 import core.DatabaseInitializer;
 import exceptions.DatabaseException;
@@ -25,8 +26,11 @@ public class DatabaseController {
         this.serverState.put("loadedAt", getCurrentTimestamp());
     }
     
-    public String createDatabase(String requestBody) {
+    public String createDatabase(String requestBody, UserSession session) {
         try {
+            if (!session.canCreateDatabase()) {
+                return "{\"success\":false,\"error\":\"ACCESS_DENIED\",\"message\":\"Недостаточно прав для создания БД. Требуется роль: Администратор\"}";
+            }
             System.out.println("=== DATABASE CREATE REQUEST ==="); //------------
             System.out.println("Request body: " + requestBody); // --------------------
 
@@ -72,8 +76,11 @@ public class DatabaseController {
         }
     }
     
-    public String loadDatabase(String requestBody) {
+    public String loadDatabase(String requestBody, UserSession session) {
         try {
+            if (!session.canLoadDatabase()) {
+                return "{\"success\":false,\"error\":\"ACCESS_DENIED\",\"message\":\"Недостаточно прав для загрузки БД\"}";
+            }
             Map<String, Object> request = JsonUtil.parseJson(requestBody);
             String databasePath = (String) request.get("databasePath");
             
@@ -124,8 +131,12 @@ public class DatabaseController {
         }
     }
     
-    public String getDatabaseInfo() {
+    public String getDatabaseInfo(UserSession session) {
         try {
+            if (!session.canViewEmployees()) { // Для информации о БД используем то же право что и для просмотра
+                return "{\"success\":false,\"error\":\"ACCESS_DENIED\",\"message\":\"Недостаточно прав для просмотра информации о БД\"}";
+            }
+            
             checkDatabaseLoaded();
             
             Map<String, Object> info = new HashMap<>();
@@ -151,8 +162,11 @@ public class DatabaseController {
         }
     }
     
-    public String clearDatabase() {
+    public String clearDatabase(UserSession session)  {
         try {
+            if (!session.canClearDatabase()) {
+                return "{\"success\":false,\"error\":\"ACCESS_DENIED\",\"message\":\"Недостаточно прав для очистки БД. Требуется роль: Администратор\"}";
+            }
             checkDatabaseLoaded();
             
             // Close current database
@@ -182,8 +196,11 @@ public class DatabaseController {
         }
     }
     
-    public String backupDatabase() {
+    public String backupDatabase(UserSession session) {
         try {
+            if (!session.canCreateBackup()) {
+                return "{\"success\":false,\"error\":\"ACCESS_DENIED\",\"message\":\"Недостаточно прав для создания бэкапа. Требуется роль: Администратор\"}";
+            }
             checkDatabaseLoaded();
             
             String databasePath = (String) serverState.get("loadedDatabasePath");

@@ -36,9 +36,23 @@ public class JsonUtil {
             return obj.toString();
         } else if (obj instanceof Map) {
             return mapToJson((Map<?, ?>) obj);
+        } else if (obj instanceof api.dto.UserSession) {
+            return userSessionToJson((api.dto.UserSession) obj);
         } else {
             return "\"" + escapeJsonString(obj.toString()) + "\"";
         }
+    }
+
+    // Добавляем новый метод:
+    private static String userSessionToJson(api.dto.UserSession session) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"username\":\"").append(escapeJsonString(session.getUsername())).append("\",");
+        sb.append("\"role\":\"").append(escapeJsonString(session.getRole().name())).append("\",");
+        sb.append("\"displayName\":\"").append(escapeJsonString(session.getRole().getDisplayName())).append("\",");
+        sb.append("\"authenticated\":").append(session.isAuthenticated());
+        sb.append("}");
+        return sb.toString();
     }
 
     // Добавляем методы для сериализации EmployeeResponse
