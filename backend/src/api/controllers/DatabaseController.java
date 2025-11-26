@@ -27,9 +27,15 @@ public class DatabaseController {
     
     public String createDatabase(String requestBody) {
         try {
+            System.out.println("=== DATABASE CREATE REQUEST ==="); //------------
+            System.out.println("Request body: " + requestBody); // --------------------
+
             Map<String, Object> request = JsonUtil.parseJson(requestBody);
             String databasePath = (String) request.get("databasePath");
             Boolean overwrite = (Boolean) request.getOrDefault("overwrite", false);
+
+            System.out.println("Database path: " + databasePath); // ------------
+            System.out.println("Overwrite: " + overwrite); // ----------------
             
             if (databasePath == null || databasePath.trim().isEmpty()) {
                 ErrorResponse error = new ErrorResponse("INVALID_PATH", "Database path is required");
@@ -46,7 +52,9 @@ public class DatabaseController {
             }
             
             // Create database
+            System.out.println("Creating database at: " + databasePath); // ---------------
             DatabaseInitializer.createDatabase(databasePath);
+            System.out.println("Database created successfully"); // -------------
             
             Map<String, Object> data = new HashMap<>();
             data.put("databasePath", databasePath);

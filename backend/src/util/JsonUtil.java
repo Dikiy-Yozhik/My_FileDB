@@ -10,17 +10,110 @@ public class JsonUtil {
     public static String toJson(Object obj) {
         if (obj == null) return "null";
         
-        if (obj instanceof String) {
+        // Добавляем обработку DTO объектов
+        if (obj instanceof api.dto.ErrorResponse) {
+            return errorResponseToJson((api.dto.ErrorResponse) obj);
+        } else if (obj instanceof api.dto.SuccessResponse) {
+            return successResponseToJson((api.dto.SuccessResponse<?>) obj);
+        } else if (obj instanceof api.dto.EmployeeResponse) {
+            return employeeResponseToJson((api.dto.EmployeeResponse) obj);
+        } else if (obj instanceof List) {
+            // Проверяем если это список EmployeeResponse
+            List<?> list = (List<?>) obj;
+            if (!list.isEmpty() && list.get(0) instanceof api.dto.EmployeeResponse) {
+                List<api.dto.EmployeeResponse> employeeList = new ArrayList<>();
+                for (Object item : list) {
+                    if (item instanceof api.dto.EmployeeResponse) {
+                        employeeList.add((api.dto.EmployeeResponse) item);
+                    }
+                }
+                return employeeResponseListToJson(employeeList);
+            }
+            return listToJson(list);
+        } else if (obj instanceof String) {
             return "\"" + escapeJsonString((String) obj) + "\"";
         } else if (obj instanceof Number || obj instanceof Boolean) {
             return obj.toString();
         } else if (obj instanceof Map) {
             return mapToJson((Map<?, ?>) obj);
-        } else if (obj instanceof List) {
-            return listToJson((List<?>) obj);
         } else {
             return "\"" + escapeJsonString(obj.toString()) + "\"";
         }
+    }
+
+    // Добавляем методы для сериализации EmployeeResponse
+    private static String employeeResponseToJson(api.dto.EmployeeResponse employee) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"id\":").append(employee.getId()).append(",");
+        sb.append("\"name\":\"").append(escapeJsonString(employee.getName())).append("\",");
+        sb.append("\"department\":\"").append(escapeJsonString(employee.getDepartment())).append("\",");
+        sb.append("\"position\":\"").append(escapeJsonString(employee.getPosition())).append("\",");
+        sb.append("\"salary\":").append(employee.getSalary()).append(",");
+        sb.append("\"hireDate\":\"").append(escapeJsonString(employee.getHireDate())).append("\"");
+        sb.append("}");
+        return sb.toString();
+    }
+
+    private static String employeeResponseListToJson(List<api.dto.EmployeeResponse> employees) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[");
+        boolean first = true;
+        for (api.dto.EmployeeResponse employee : employees) {
+            if (!first) sb.append(",");
+            sb.append(employeeResponseToJson(employee));
+            first = false;
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    // Обновляем successResponseToJson для правильной обработки данных
+    private static String successResponseToJson(api.dto.SuccessResponse<?> success) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"success\":").append(success.isSuccess()).append(",");
+        sb.append("\"message\":\"").append(escapeJsonString(success.getMessage())).append("\"");
+        
+        // Добавляем data если есть
+        if (success.getData() != null) {
+            sb.append(",\"data\":").append(toJson(success.getData()));
+        }
+        
+        // Добавляем total если есть
+        if (success.getTotal() != null) {
+            sb.append(",\"total\":").append(success.getTotal());
+        }
+        
+        // Добавляем deletedCount если есть
+        if (success.getDeletedCount() != null) {
+            sb.append(",\"deletedCount\":").append(success.getDeletedCount());
+        }
+        
+        sb.append("}");
+        return sb.toString();
+    }
+
+    // errorResponseToJson уже должен быть (добавьте если нет)
+    private static String errorResponseToJson(api.dto.ErrorResponse error) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"success\":").append(error.isSuccess()).append(",");
+        sb.append("\"error\":\"").append(escapeJsonString(error.getError())).append("\",");
+        sb.append("\"message\":\"").append(escapeJsonString(error.getMessage())).append("\"");
+        
+        // Добавляем details если есть
+        if (error.getDetails() != null && !error.getDetails().isEmpty()) {
+            sb.append(",\"details\":").append(mapToJson(error.getDetails()));
+        }
+        
+        // Добавляем timestamp
+        if (error.getTimestamp() != null) {
+            sb.append(",\"timestamp\":\"").append(escapeJsonString(error.getTimestamp())).append("\"");
+        }
+        
+        sb.append("}");
+        return sb.toString();
     }
     
     public static Map<String, Object> parseJson(String json) {

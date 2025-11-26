@@ -122,53 +122,91 @@ public class HttpServer {
     
     private String processRequest(String method, String path, String requestBody, Map<String, String> headers) {
         try {
+            // Детальное логирование
+            System.out.println("=== PROCESSING REQUEST ===");
+            System.out.println("Method: " + method);
+            System.out.println("Path: " + path);
+            System.out.println("Body: " + requestBody);
+            
             // CORS preflight
             if ("OPTIONS".equals(method)) {
+                System.out.println("Handling CORS preflight");
                 return "{\"success\":true}";
             }
             
-            // Parse path and parameters
             String[] pathParts = path.split("\\?");
             String endpoint = pathParts[0];
             Map<String, String> queryParams = parseQueryParams(pathParts.length > 1 ? pathParts[1] : "");
             
+            System.out.println("Endpoint: " + endpoint);
+            System.out.println("Query params: " + queryParams);
+            
+            String responseBody;
+            
             // Routing
             switch (endpoint) {
                 case "/employees":
-                    return handleEmployeesEndpoint(method, queryParams, requestBody);
+                    responseBody = handleEmployeesEndpoint(method, queryParams, requestBody);
+                    break;
                     
                 case "/database/create":
-                    if ("POST".equals(method)) return databaseController.createDatabase(requestBody);
+                    if ("POST".equals(method)) {
+                        responseBody = databaseController.createDatabase(requestBody);
+                    } else {
+                        responseBody = "{\"success\":false,\"error\":\"METHOD_NOT_ALLOWED\",\"message\":\"Method not allowed for " + endpoint + "\"}";
+                    }
                     break;
                     
                 case "/database/load":
-                    if ("POST".equals(method)) return databaseController.loadDatabase(requestBody);
+                    if ("POST".equals(method)) {
+                        responseBody = databaseController.loadDatabase(requestBody);
+                    } else {
+                        responseBody = "{\"success\":false,\"error\":\"METHOD_NOT_ALLOWED\",\"message\":\"Method not allowed for " + endpoint + "\"}";
+                    }
                     break;
                     
                 case "/database/info":
-                    if ("GET".equals(method)) return databaseController.getDatabaseInfo();
+                    if ("GET".equals(method)) {
+                        responseBody = databaseController.getDatabaseInfo();
+                    } else {
+                        responseBody = "{\"success\":false,\"error\":\"METHOD_NOT_ALLOWED\",\"message\":\"Method not allowed for " + endpoint + "\"}";
+                    }
                     break;
                     
                 case "/database/backup":
-                    if ("POST".equals(method)) return databaseController.backupDatabase();
+                    if ("POST".equals(method)) {
+                        responseBody = databaseController.backupDatabase();
+                    } else {
+                        responseBody = "{\"success\":false,\"error\":\"METHOD_NOT_ALLOWED\",\"message\":\"Method not allowed for " + endpoint + "\"}";
+                    }
                     break;
                     
                 case "/database/clear":
-                    if ("DELETE".equals(method)) return databaseController.clearDatabase();
+                    if ("DELETE".equals(method)) {
+                        responseBody = databaseController.clearDatabase();
+                    } else {
+                        responseBody = "{\"success\":false,\"error\":\"METHOD_NOT_ALLOWED\",\"message\":\"Method not allowed for " + endpoint + "\"}";
+                    }
                     break;
                     
                 default:
                     // Check for /employees/{id}
                     if (endpoint.startsWith("/employees/")) {
                         String idParam = endpoint.substring("/employees/".length());
-                        return handleEmployeeByIdEndpoint(method, idParam, requestBody);
+                        responseBody = handleEmployeeByIdEndpoint(method, idParam, requestBody);
+                    } else {
+                        responseBody = "{\"success\":false,\"error\":\"ENDPOINT_NOT_FOUND\",\"message\":\"Endpoint not found: " + endpoint + "\"}";
                     }
             }
             
-            // Endpoint not found
-            return "{\"success\":false,\"error\":\"ENDPOINT_NOT_FOUND\",\"message\":\"Endpoint not found: " + endpoint + "\"}";
+            System.out.println("Response body: " + responseBody);
+            System.out.println("=== REQUEST COMPLETE ===");
+            
+            return responseBody;
             
         } catch (Exception e) {
+            System.err.println("ERROR in processRequest: " + e.getMessage());
+            e.printStackTrace();
             return "{\"success\":false,\"error\":\"REQUEST_PROCESSING_ERROR\",\"message\":\"Error processing request: " + e.getMessage() + "\"}";
         }
     }

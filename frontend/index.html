@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My_FileDB - Файловая база данных</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- ШАПКА -->
+        <header class="app-header">
+            <div class="header-title">
+                <h1>🗃️ My_FileDB</h1>
+                <span id="db-status" class="db-status">БД не загружена</span>
+            </div>
+            <div class="header-controls">
+                <button id="create-db" class="btn btn-primary">Создать БД</button>
+                <button id="load-db" class="btn btn-secondary">Загрузить БД</button>
+                <button id="backup-db" class="btn btn-secondary">Backup</button>
+                <button id="export-excel" class="btn btn-secondary">Excel</button>
+            </div>
+        </header>
+
+        <!-- ПАНЕЛЬ УПРАВЛЕНИЯ -->
+        <section class="controls-panel">
+            <div class="search-controls">
+                <input type="text" id="search-input" placeholder="Поиск по ФИО..." class="search-input">
+                <select id="department-filter" class="department-select">
+                    <option value="">Все отделы</option>
+                    <option value="IT">IT</option>
+                    <option value="HR">HR</option>
+                    <option value="Finance">Finance</option>
+                    <option value="Marketing">Marketing</option>
+                </select>
+                <button id="search-btn" class="btn btn-search">🔍 Найти</button>
+                <button id="clear-search" class="btn btn-clear">Очистить</button>
+            </div>
+            <div class="action-controls">
+                <button id="add-employee" class="btn btn-success">➕ Добавить</button>
+                <button id="refresh-data" class="btn btn-info">🔄 Обновить</button>
+            </div>
+        </section>
+
+        <!-- ФОРМА СОТРУДНИКА -->
+        <section id="employee-form-section" class="form-section hidden">
+            <div class="form-container">
+                <h3 id="form-title">Добавление сотрудника</h3>
+                <form id="employee-form" class="employee-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="employee-id">ID *</label>
+                            <input type="number" id="employee-id" name="id" required min="1">
+                        </div>
+                        <div class="form-group">
+                            <label for="employee-salary">Зарплата *</label>
+                            <input type="number" id="employee-salary" name="salary" required min="0" step="0.01">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="employee-name">ФИО *</label>
+                        <input type="text" id="employee-name" name="name" required maxlength="100">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="employee-department">Отдел *</label>
+                            <input type="text" id="employee-department" name="department" required maxlength="50">
+                        </div>
+                        <div class="form-group">
+                            <label for="employee-position">Должность *</label>
+                            <input type="text" id="employee-position" name="position" required maxlength="50">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="employee-hireDate">Дата приема *</label>
+                        <input type="date" id="employee-hireDate" name="hireDate" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-success">Сохранить</button>
+                        <button type="button" id="cancel-form" class="btn btn-secondary">Отмена</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- ТАБЛИЦА ДАННЫХ -->
+        <section class="table-section">
+            <div class="table-header">
+                <h3>Сотрудники</h3>
+                <span id="record-count" class="record-count">Записей: 0</span>
+            </div>
+            <div class="table-container">
+                <table id="employees-table" class="employees-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>ФИО</th>
+                            <th>Отдел</th>
+                            <th>Должность</th>
+                            <th>Зарплата</th>
+                            <th>Дата приема</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="employees-tbody">
+                        <!-- Данные будут загружены через JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- СТАТУС БАР -->
+        <footer class="status-bar">
+            <span id="status-message" class="status-message">Готов к работе</span>
+            <div id="loading-indicator" class="loading-indicator hidden">
+                <span class="spinner"></span>
+                <span>Загрузка...</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО ДЛЯ УПРАВЛЕНИЯ БД -->
+    <div id="db-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3 id="modal-title">Создание базы данных</h3>
+            <input type="text" id="db-path" placeholder="Введите путь к файлу БД">
+            <div class="modal-actions">
+                <button id="modal-confirm" class="btn btn-primary">Подтвердить</button>
+                <button id="modal-cancel" class="btn btn-secondary">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="api/api-client.js"></script>
+    <script src="ui/ui-manager.js"></script>
+    <script src="ui/table-render.js"></script>
+    <script src="ui/form-handler.js"></script>
+    <script src="utils/helpers.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
