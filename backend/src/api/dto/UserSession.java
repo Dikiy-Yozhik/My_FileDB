@@ -6,11 +6,17 @@ public class UserSession {
     private boolean authenticated;
     private long loginTime;
     
+    public UserSession(String username, UserRole role, boolean authenticated) {
+        this.username = username;
+        this.role = role;
+        this.authenticated = authenticated;
+    }
+
+    // 🔥 ДОБАВЬТЕ конструктор БЕЗ authenticated (по умолчанию false)
     public UserSession(String username, UserRole role) {
         this.username = username;
         this.role = role;
-        this.authenticated = true;
-        this.loginTime = System.currentTimeMillis();
+        this.authenticated = false; // по умолчанию не аутентифицирован
     }
     
     // Геттеры

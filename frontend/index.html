@@ -3,238 +3,196 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My_FileDB - Файловая база данных</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/components.css">
+    <title>My_FileDB - Простая файловая БД</title>
+    <script>
+        // 🔥 ПРОВЕРКА АВТОРИЗАЦИИ ПРИ ЗАГРУЗКЕ СТРАНИЦЫ
+        window.addEventListener('DOMContentLoaded', () => {
+            const isAuthenticated = localStorage.getItem('isAuthenticated');
+            if (!isAuthenticated || isAuthenticated !== 'true') {
+                console.log('🚫 Not authenticated, redirecting to login...');
+                window.location.href = 'login.html';
+                return;
+            }
+        });
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; }
+        
+        .header { 
+            background: #2c3e50; color: white; padding: 1rem; 
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        
+        .container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+        
+        .card { 
+            background: white; border-radius: 8px; padding: 1.5rem; 
+            margin-bottom: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .btn { 
+            background: #3498db; color: white; border: none; padding: 0.5rem 1rem;
+            border-radius: 4px; cursor: pointer; margin: 0.25rem;
+        }
+        .btn:hover { background: #2980b9; }
+        .btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        
+        .btn-success { background: #27ae60; }
+        .btn-success:hover { background: #219a52; }
+        
+        .btn-danger { background: #e74c3c; }
+        .btn-danger:hover { background: #c0392b; }
+        
+        .status { padding: 0.5rem; border-radius: 4px; margin: 0.5rem 0; }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+        
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; font-weight: bold; }
+        
+        .form-group { margin: 1rem 0; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+        input, select { 
+            width: 100%; padding: 0.5rem; border: 1px solid #ddd; 
+            border-radius: 4px; font-size: 1rem;
+        }
+        
+        .hidden { display: none; }
+        .loading { opacity: 0.6; pointer-events: none; }
+    </style>
 </head>
 <body>
-    <!-- Навигация -->
-    <nav class="navbar">
-        <div class="nav-brand">
-            <h1>🗃️ My_FileDB</h1>
-            <span id="user-info" class="user-info"></span>
+    <div class="header">
+        <h1>🗃️ My_FileDB</h1>
+        <div>
+            <span id="user-info">Не авторизован</span>
+            <button id="logout-btn" class="btn btn-danger">Выйти</button>
         </div>
-        
-        <div class="nav-links">
-            <a href="#dashboard" class="nav-link active" data-page="dashboard">Главная</a>
-            <a href="#employees" class="nav-link" data-page="employees">Сотрудники</a>
-            <a href="#backup" class="nav-link" data-page="backup">Бэкапы</a>
-            <a href="#export" class="nav-link" data-page="export">Экспорт</a>
-            <button id="logout-btn" class="btn btn-secondary btn-sm">Выйти</button>
-        </div>
-    </nav>
+    </div>
 
-    <!-- Основной контент -->
-    <div id="app-content" class="app-content">
-        <!-- Главная страница -->
-        <div id="dashboard-page" class="page active">
-            <div class="page-header">
-                <h2>Управление базой данных</h2>
-                <div class="db-status" id="db-status">БД не загружена</div>
+    <div class="container">
+        <!-- Статус -->
+        <div id="status-message" class="status"></div>
+
+        <!-- Управление БД -->
+        <div class="card">
+            <h2>Управление базой данных</h2>
+            <div class="form-group">
+                <label>Путь к БД:</label>
+                <input type="text" id="db-path" placeholder="data/mydatabase" value="data/mydatabase">
             </div>
-
-            <div class="controls-panel">
-                <div class="control-group">
-                    <h3>Управление БД</h3>
-                    <button id="create-db" class="btn btn-primary">Создать БД</button>
-                    <button id="load-db" class="btn btn-secondary">Загрузить БД</button>
-                    <button id="backup-db" class="btn btn-info" disabled>Создать бэкап</button>
-                    <button id="export-excel" class="btn btn-success" disabled>Экспорт в Excel</button>
-                </div>
-
-                <div class="control-group">
-                    <h3>Управление данными</h3>
-                    <button id="add-employee" class="btn btn-primary" disabled>Добавить сотрудника</button>
-                    <button id="refresh-data" class="btn btn-secondary" disabled>Обновить данные</button>
-                </div>
-
-                <div class="control-group">
-                    <h3>Информация о системе</h3>
-                    <div class="system-info">
-                        <p>Текущий пользователь: <span id="current-user">Не авторизован</span></p>
-                        <p>Роль: <span id="current-role">Гость</span></p>
-                        <p>Статус БД: <span id="db-info">Не подключена</span></p>
-                    </div>
-                </div>
-            </div>
+            <button id="create-db" class="btn">Создать БД</button>
+            <button id="load-db" class="btn">Загрузить БД</button>
+            <button id="backup-db" class="btn" disabled>Создать бэкап</button>
+            <button id="export-excel" class="btn btn-success" disabled>Экспорт в Excel</button>
+            <button id="clear-db" class="btn btn-danger" disabled>Очистить БД</button>
         </div>
 
-        <!-- Страница сотрудников -->
-        <div id="employees-page" class="page">
-            <div class="page-header">
-                <h2>Управление сотрудниками</h2>
-            </div>
-
-            <!-- Поиск и фильтры -->
-            <div class="search-panel">
-                <input type="text" id="search-input" placeholder="Поиск по имени..." class="search-input">
-                <select id="department-filter" class="filter-select">
-                    <option value="">Все отделы</option>
-                    <option value="IT">IT</option>
-                    <option value="HR">HR</option>
-                    <option value="Finance">Финансы</option>
-                    <option value="Marketing">Маркетинг</option>
-                </select>
-                <button id="search-btn" class="btn btn-primary">Поиск</button>
-                <button id="clear-search" class="btn btn-secondary">Очистить</button>
-            </div>
-
-            <!-- Таблица сотрудников -->
-            <div class="table-container">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>ФИО</th>
-                            <th>Отдел</th>
-                            <th>Должность</th>
-                            <th>Зарплата</th>
-                            <th>Дата приема</th>
-                            <th>Действия</th>
-                        </tr>
-                    </thead>
-                    <tbody id="employees-tbody">
-                        <!-- Данные будут загружаться динамически -->
-                        <tr>
-                            <td colspan="7" class="no-data">Нет данных для отображения</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="table-footer">
-                <span id="record-count">Записей: 0</span>
-            </div>
-        </div>
-
-        <!-- Форма сотрудника -->
-        <div id="employee-form-section" class="form-section hidden">
-            <form id="employee-form" class="employee-form">
-                <h3 id="form-title">Добавление сотрудника</h3>
-                
-                <input type="hidden" id="employee-id">
-                
-                <div class="form-group">
-                    <label for="employee-name">ФИО:</label>
-                    <input type="text" id="employee-name" required>
+        <!-- Поиск -->
+        <div class="card">
+            <h2>Поиск сотрудников</h2>
+            <div style="display: flex; gap: 1rem; align-items: end;">
+                <div class="form-group" style="flex: 1;">
+                    <label>Поиск по имени:</label>
+                    <input type="text" id="search-input" placeholder="Введите имя...">
                 </div>
-                
-                <div class="form-group">
-                    <label for="employee-department">Отдел:</label>
-                    <select id="employee-department" required>
-                        <option value="">Выберите отдел</option>
+                <div class="form-group" style="flex: 1;">
+                    <label>Отдел:</label>
+                    <select id="department-filter">
+                        <option value="">Все отделы</option>
                         <option value="IT">IT</option>
                         <option value="HR">HR</option>
                         <option value="Finance">Финансы</option>
                         <option value="Marketing">Маркетинг</option>
                     </select>
                 </div>
+                <button id="search-btn" class="btn">Поиск</button>
+                <button id="clear-search" class="btn">Очистить</button>
+            </div>
+        </div>
+
+        <!-- Таблица сотрудников -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2>Сотрудники</h2>
+                <button id="add-employee" class="btn" disabled>Добавить сотрудника</button>
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>ФИО</th>
+                        <th>Отдел</th>
+                        <th>Должность</th>
+                        <th>Зарплата</th>
+                        <th>Дата приема</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="employees-table">
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem;">
+                            Нет данных для отображения
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <div style="margin-top: 1rem;">
+                <strong id="record-count">Записей: 0</strong>
+            </div>
+        </div>
+
+        <!-- Форма сотрудника -->
+        <div id="employee-form" class="card hidden">
+            <h2 id="form-title">Добавление сотрудника</h2>
+            <form id="employee-data-form">
+                <input type="hidden" id="employee-id">
                 
-                <div class="form-group">
-                    <label for="employee-position">Должность:</label>
-                    <input type="text" id="employee-position" required>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label for="employee-name">ФИО *</label>
+                        <input type="text" id="employee-name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="employee-department">Отдел *</label>
+                        <select id="employee-department" required>
+                            <option value="">Выберите отдел</option>
+                            <option value="IT">IT</option>
+                            <option value="HR">HR</option>
+                            <option value="Finance">Финансы</option>
+                            <option value="Marketing">Маркетинг</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="employee-position">Должность *</label>
+                        <input type="text" id="employee-position" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="employee-salary">Зарплата *</label>
+                        <input type="number" id="employee-salary" step="0.01" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="employee-hireDate">Дата приема *</label>
+                        <input type="date" id="employee-hireDate" required>
+                    </div>
                 </div>
                 
-                <div class="form-group">
-                    <label for="employee-salary">Зарплата:</label>
-                    <input type="number" id="employee-salary" step="0.01" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="employee-hireDate">Дата приема:</label>
-                    <input type="date" id="employee-hireDate" required>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Сохранить</button>
-                    <button type="button" id="cancel-form" class="btn btn-secondary">Отмена</button>
+                <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                    <button type="submit" class="btn">Сохранить</button>
+                    <button type="button" id="cancel-form" class="btn btn-danger">Отмена</button>
                 </div>
             </form>
         </div>
-
-        <!-- Модальное окно для БД -->
-        <div id="db-modal" class="modal hidden">
-            <div class="modal-content">
-                <h3 id="modal-title">Создание базы данных</h3>
-                
-                <div class="form-group">
-                    <label for="db-path">Путь к файлу БД:</label>
-                    <input type="text" id="db-path" placeholder="Введите путь к файлу...">
-                </div>
-                
-                <div class="modal-actions">
-                    <button id="modal-confirm" class="btn btn-primary">Подтвердить</button>
-                    <button id="modal-cancel" class="btn btn-secondary">Отмена</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Страница бэкапов -->
-        <div id="backup-page" class="page">
-            <div class="page-header">
-                <h2>Управление бэкапами</h2>
-            </div>
-            
-            <div class="controls-panel">
-                <div class="control-group">
-                    <h3>Создание бэкапа</h3>
-                    <button id="create-backup" class="btn btn-primary">Создать новый бэкап</button>
-                    <button id="restore-backup" class="btn btn-warning">Восстановить из бэкапа</button>
-                </div>
-                
-                <div class="control-group">
-                    <h3>Список бэкапов</h3>
-                    <div id="backup-list" class="backup-list">
-                        <!-- Список бэкапов будет загружаться динамически -->
-                        <div class="no-data">Нет доступных бэкапов</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Страница экспорта -->
-        <div id="export-page" class="page">
-            <div class="page-header">
-                <h2>Экспорт данных</h2>
-            </div>
-            
-            <div class="controls-panel">
-                <div class="control-group">
-                    <h3>Экспорт в Excel</h3>
-                    <button id="generate-excel" class="btn btn-success">Сгенерировать Excel файл</button>
-                    <button id="download-excel" class="btn btn-primary" disabled>Скачать Excel</button>
-                </div>
-                
-                <div class="control-group">
-                    <h3>История экспорта</h3>
-                    <div id="export-history" class="export-history">
-                        <!-- История экспорта будет загружаться динамически -->
-                        <div class="no-data">Нет истории экспорта</div>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
-    <!-- Статус бар -->
-    <footer class="status-bar">
-        <span id="status-message" class="status-message">Готов к работе</span>
-        <div id="loading-indicator" class="loading-indicator hidden">
-            <span class="spinner"></span>
-            <span>Загрузка...</span>
-        </div>
-    </footer>
-
-    <!-- 🔥 ИСПРАВЛЕННЫЕ ПУТИ К JS ФАЙЛАМ -->
-    <script src="utils/helpers.js"></script>
-    <script src="js/api/api-client.js"></script>
-    <script src="js/ui/ui-manager.js"></script>
-    <script src="js/ui/table-render.js"></script>
-    <script src="js/ui/form-handler.js"></script>
-    <script src="js/views/dashboard.js"></script>
-    <script src="js/views/employees.js"></script>
-    <script src="js/views/backup.js"></script>
-    <script src="js/views/export.js"></script>
-    <script src="js/router.js"></script>
-    <script src="js/app.js"></script>
+    <script src="simple-app.js"></script>
 </body>
 </html>

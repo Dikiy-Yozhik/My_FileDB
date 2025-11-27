@@ -111,30 +111,32 @@ public class HttpServer {
     }
 
     private void sendResponse(OutputStream out, String responseBody, UserSession userSession, String method, Map<String, String> headers) throws IOException {
-        String allowOrigin = "http://localhost:3000";
+        String origin = headers.getOrDefault("Origin", "http://localhost:3000");
+        String allowOrigin = origin.equals("null") ? "http://localhost:3000" : origin;
         
         String sessionCookie = "";
-        if (!userSession.getUsername().equals("guest")) {
+        if (userSession != null && !userSession.getUsername().equals("guest")) {
             String sessionId = createSession(userSession);
-            sessionCookie = "Set-Cookie: sessionId=" + sessionId + "; Path=/; HttpOnly; SameSite=None\r\n";
+            // 🔥 ИСПРАВЛЯЕМ cookie - убираем SameSite=None для localhost
+            sessionCookie = "Set-Cookie: sessionId=" + sessionId + "; Path=/; HttpOnly; Max-Age=3600\r\n";
+            System.out.println("🍪 Setting session cookie: " + sessionId + " for user: " + userSession.getUsername());
         }
         
-        // 🔥 ВАЖНО: Используем UTF-8 для кириллицы
         byte[] responseBytes = responseBody.getBytes("UTF-8");
         
         String response = "HTTP/1.1 200 OK\r\n" +
-                        "Content-Type: application/json; charset=utf-8\r\n" + // ← добавить charset
+                        "Content-Type: application/json; charset=utf-8\r\n" +
                         "Access-Control-Allow-Origin: " + allowOrigin + "\r\n" +
                         "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
                         "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Cookie\r\n" +
                         "Access-Control-Allow-Credentials: true\r\n" +
                         "Access-Control-Max-Age: 3600\r\n" +
                         sessionCookie +
-                        "Content-Length: " + responseBytes.length + "\r\n" + // ← использовать байты в UTF-8
+                        "Content-Length: " + responseBytes.length + "\r\n" +
                         "\r\n";
         
-        out.write(response.getBytes("UTF-8")); // ← заголовки в UTF-8
-        out.write(responseBytes); // ← тело ответа в UTF-8
+        out.write(response.getBytes("UTF-8"));
+        out.write(responseBytes);
         out.flush();
         System.out.println("✅ Response sent successfully! Length: " + responseBytes.length);
     }
@@ -156,22 +158,29 @@ public class HttpServer {
     
     private UserSession getUserSession(Map<String, String> headers) {
         String cookieHeader = headers.get("Cookie");
+        System.out.println("🍪 Cookie header: " + cookieHeader);
+        
         if (cookieHeader != null) {
-            // Ищем sessionId в cookies
             for (String cookie : cookieHeader.split(";")) {
                 String[] parts = cookie.trim().split("=");
                 if (parts.length == 2 && "sessionId".equals(parts[0])) {
-                    UserSession session = getSession(parts[1]);
+                    String sessionId = parts[1];
+                    System.out.println("🔍 Found sessionId: " + sessionId);
+                    UserSession session = getSession(sessionId);
                     if (session != null) {
+                        System.out.println("✅ Valid session found for: " + session.getUsername());
                         return session;
+                    } else {
+                        System.out.println("❌ Invalid or expired session: " + sessionId);
                     }
                 }
             }
         }
         
-        // Если сессии нет, создаем гостевую
-        return authService.getGuestSession();
-    }
+        // 🔥 ВАЖНОЕ ИСПРАВЛЕНИЕ: возвращаем null вместо гостевой сессии
+        System.out.println("👤 No valid session found, returning null");
+        return null;
+}
 
     private boolean handleOptionsRequest(OutputStream out, Map<String, String> headers) throws IOException {
         // Разрешаем только конкретные origins для безопасности
@@ -190,13 +199,44 @@ public class HttpServer {
         out.flush();
         return true;
     }
+
+    // 🔥 Метод для проверки, требует ли endpoint авторизации
+    private boolean requiresAuthentication(String path) {
+        // Список endpoint'ов, доступных без авторизации
+        String[] publicEndpoints = {"/auth/login", "/auth/status", "/frontend/"};
+        
+        for (String endpoint : publicEndpoints) {
+            if (path.startsWith(endpoint)) {
+                return false;
+            }
+        }
+        return true; // все остальные endpoint'ы требуют авторизации
+    }
+
+    // 🔥 Метод для проверки, авторизован ли пользователь
+    private boolean isAuthenticated(UserSession userSession) {
+        return userSession != null && !userSession.getUsername().equals("guest");
+    }
     
     // Обновляем processRequest для принятия userSession
     private String processRequest(String method, String path, String requestBody, 
-                            Map<String, String> headers, UserSession userSession) {
+                        Map<String, String> headers, UserSession userSession) {
         try {
             System.out.println("=== PROCESSING REQUEST ===");
-            System.out.println("User: " + userSession.getUsername() + " [" + userSession.getRole() + "]");
+            
+            // 🔥 Показываем реальный статус аутентификации
+            if (userSession != null) {
+                System.out.println("User: " + userSession.getUsername() + " [" + userSession.getRole() + "]");
+            } else {
+                System.out.println("User: NOT AUTHENTICATED");
+            }
+
+            // 🔥 ПРОВЕРКА АВТОРИЗАЦИИ ДЛЯ ЗАЩИЩЕННЫХ ENDPOINT'ОВ
+            if (requiresAuthentication(path) && !isAuthenticated(userSession)) {
+                System.out.println("🚫 Unauthorized access attempt to: " + path);
+                return "{\"success\":false,\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}";
+            }
+            
             System.out.println("Method: " + method);
             System.out.println("Path: " + path);
             System.out.println("Headers: " + headers);            
@@ -312,6 +352,10 @@ public class HttpServer {
             if (userSession != null) {
                 System.out.println("✅ Login successful for: " + username);
                 
+                // 🔥 ВАЖНО: СОЗДАЕМ СЕССИЮ!
+                String sessionId = createSession(userSession);
+                System.out.println("🔑 Session created: " + sessionId);
+                
                 // 🔥 ПРОСТОЙ ВАРИАНТ - создаем JSON вручную
                 String response = "{" +
                     "\"success\":true," +
@@ -353,13 +397,33 @@ public class HttpServer {
     }
     
     private String getAuthStatus(UserSession userSession) {
-        Map<String, Object> data = new HashMap<>();
-        data.put("username", userSession.getUsername());
-        data.put("role", userSession.getRole().name());
-        data.put("displayName", userSession.getRole().getDisplayName());
-        data.put("authenticated", userSession.isAuthenticated());
-        
-        return "{\"success\":true,\"data\":" + JsonUtil.toJson(data) + "}";
+        try {
+            System.out.println("🔍 Getting auth status for: " + (userSession != null ? userSession.getUsername() : "null"));
+            
+            Map<String, Object> data = new HashMap<>();
+            
+            if (userSession != null && !userSession.getUsername().equals("guest")) {
+                // 🔥 ТОЛЬКО реальные пользователи считаются авторизованными
+                data.put("username", userSession.getUsername());
+                data.put("role", userSession.getRole().name());
+                data.put("displayName", userSession.getRole().getDisplayName());
+                data.put("authenticated", true);
+            } else {
+                // 🔥 Гости НЕ авторизованы
+                data.put("username", "guest");
+                data.put("role", "GUEST");
+                data.put("displayName", "Гость");
+                data.put("authenticated", false);
+            }
+            
+            String response = "{\"success\":true,\"data\":" + JsonUtil.toJson(data) + "}";
+            System.out.println("📤 Auth status response: " + response);
+            return response;
+            
+        } catch (Exception e) {
+            System.out.println("💥 Error in getAuthStatus: " + e.getMessage());
+            return "{\"success\":false,\"error\":\"AUTH_STATUS_ERROR\",\"message\":\"Error getting auth status\"}";
+        }
     }
     
     // Обновляем обработчики endpoint'ов для передачи userSession
