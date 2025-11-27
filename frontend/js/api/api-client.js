@@ -7,6 +7,7 @@ class ApiClient {
         const url = `${this.BASE_URL}${endpoint}`;
         
         const config = {
+            credentials: 'include', // Важно для cookies
             headers: {
                 'Content-Type': 'application/json',
                 ...options.headers
@@ -28,11 +29,29 @@ class ApiClient {
         }
     }
 
+    // Аутентификация
+    async login(username, password) {
+        return this.request('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password })
+        });
+    }
+
+    async logout() {
+        return this.request('/auth/logout', {
+            method: 'POST'
+        });
+    }
+
+    async getAuthStatus() {
+        return this.request('/auth/status');
+    }
+
     // Database methods
-    async createDatabase(databasePath, overwrite = true) {
+    async createDatabase(databasePath) {
         return this.request('/database/create', {
             method: 'POST',
-            body: JSON.stringify({ databasePath, overwrite })
+            body: JSON.stringify({ databasePath, overwrite: true })
         });
     }
 
@@ -43,14 +62,14 @@ class ApiClient {
         });
     }
 
-    async backupDatabase() {
-        return this.request('/database/backup', {
-            method: 'POST'
-        });
-    }
-
     async getDatabaseInfo() {
         return this.request('/database/info');
+    }
+
+    async clearDatabase() {
+        return this.request('/database/clear', {
+            method: 'DELETE'
+        });
     }
 
     // Employee methods
@@ -90,8 +109,37 @@ class ApiClient {
         });
     }
 
-    // Export
-    exportToExcel() {
-        window.open(`${this.BASE_URL}/export/excel`, '_blank');
+    // Backup methods
+    async createBackup() {
+        return this.request('/backup/create', {
+            method: 'POST'
+        });
+    }
+
+    async restoreBackup(backupPath, targetPath) {
+        return this.request('/backup/restore', {
+            method: 'POST',
+            body: JSON.stringify({ backupPath, targetPath })
+        });
+    }
+
+    async listBackups() {
+        return this.request('/backup/list');
+    }
+
+    async deleteBackup(backupPath) {
+        return this.request('/backup/delete', {
+            method: 'DELETE',
+            body: JSON.stringify({ backupPath })
+        });
+    }
+
+    // Export methods
+    async exportToCSV() {
+        return this.request('/export/csv');
+    }
+
+    async listExportedFiles() {
+        return this.request('/export/list');
     }
 }

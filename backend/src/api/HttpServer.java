@@ -4,11 +4,13 @@ import api.controllers.DatabaseController;
 import api.controllers.EmployeeController;
 import util.JsonUtil;
 import api.dto.UserSession;
+import api.controllers.BackupController;
 import api.controllers.ExportController;
 import service.AuthService;
 
 import java.io.*;
 import java.net.*;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -22,6 +24,7 @@ public class HttpServer {
     private final AuthService authService;
     private final Map<String, UserSession> sessions; // Хранилище сессий
     private final ExportController exportController;
+    private final BackupController backupController;
     
     public HttpServer(int port) {
         this.port = port;
@@ -30,6 +33,7 @@ public class HttpServer {
         this.authService = new AuthService();
         this.sessions = new HashMap<>();
         this.exportController = new ExportController(databaseController);
+        this.backupController = new BackupController(databaseController);
     }
     
     // Добавляем методы для работы с сессиями
@@ -47,7 +51,6 @@ public class HttpServer {
         return java.util.UUID.randomUUID().toString();
     }
     
-    // В методе handleRequest добавляем обработку сессий
     private void handleRequest(Socket clientSocket) throws IOException {
         BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
         OutputStream out = clientSocket.getOutputStream();
@@ -73,7 +76,14 @@ public class HttpServer {
                 }
             }
             
-            // Read body if exists
+            // 🔥 Обработка OPTIONS ДО чтения body
+            if ("OPTIONS".equals(method)) {
+                System.out.println("✅ Handling CORS preflight for: " + path);
+                handleOptionsRequest(out, headers);
+                return; // Завершаем обработку
+            }
+            
+            // Read body if exists (только для НЕ-OPTIONS запросов)
             String requestBody = null;
             if (headers.containsKey("Content-Length")) {
                 int contentLength = Integer.parseInt(headers.get("Content-Length"));
@@ -88,17 +98,60 @@ public class HttpServer {
             // Process request with session
             String responseBody = processRequest(method, path, requestBody, headers, userSession);
             
-            // Send response with session cookie if needed
-            sendResponse(out, responseBody, userSession);
+            // Send response with proper CORS headers
+            sendResponse(out, responseBody, userSession, method, headers);
             
         } catch (Exception e) {
-            // Request processing error
-            String errorResponse = "HTTP/1.1 500 Internal Server Error\r\n" +
-                                 "Content-Type: application/json\r\n" +
-                                 "\r\n" +
-                                 "{\"success\":false,\"error\":\"SERVER_ERROR\",\"message\":\"Internal server error\"}";
-            out.write(errorResponse.getBytes());
+            // Send error response with CORS headers
+            String errorResponse = "{\"success\":false,\"error\":\"SERVER_ERROR\",\"message\":\"Internal server error\"}";
+            sendErrorResponse(out, errorResponse);
+        } finally {
+            clientSocket.close();
         }
+    }
+
+    private void sendResponse(OutputStream out, String responseBody, UserSession userSession, String method, Map<String, String> headers) throws IOException {
+        String allowOrigin = "http://localhost:3000";
+        
+        String sessionCookie = "";
+        if (!userSession.getUsername().equals("guest")) {
+            String sessionId = createSession(userSession);
+            sessionCookie = "Set-Cookie: sessionId=" + sessionId + "; Path=/; HttpOnly; SameSite=None\r\n";
+        }
+        
+        // 🔥 ВАЖНО: Используем UTF-8 для кириллицы
+        byte[] responseBytes = responseBody.getBytes("UTF-8");
+        
+        String response = "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: application/json; charset=utf-8\r\n" + // ← добавить charset
+                        "Access-Control-Allow-Origin: " + allowOrigin + "\r\n" +
+                        "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
+                        "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Cookie\r\n" +
+                        "Access-Control-Allow-Credentials: true\r\n" +
+                        "Access-Control-Max-Age: 3600\r\n" +
+                        sessionCookie +
+                        "Content-Length: " + responseBytes.length + "\r\n" + // ← использовать байты в UTF-8
+                        "\r\n";
+        
+        out.write(response.getBytes("UTF-8")); // ← заголовки в UTF-8
+        out.write(responseBytes); // ← тело ответа в UTF-8
+        out.flush();
+        System.out.println("✅ Response sent successfully! Length: " + responseBytes.length);
+    }
+
+    private void sendErrorResponse(OutputStream out, String errorBody) throws IOException {
+        String response = "HTTP/1.1 500 Internal Server Error\r\n" +
+                        "Content-Type: application/json\r\n" +
+                        "Access-Control-Allow-Origin: http://localhost:3000\r\n" +
+                        "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
+                        "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Cookie\r\n" +
+                        "Access-Control-Allow-Credentials: true\r\n" +
+                        "Content-Length: " + errorBody.length() + "\r\n" +
+                        "\r\n" +
+                        errorBody;
+        
+        out.write(response.getBytes());
+        out.flush();
     }
     
     private UserSession getUserSession(Map<String, String> headers) {
@@ -119,48 +172,46 @@ public class HttpServer {
         // Если сессии нет, создаем гостевую
         return authService.getGuestSession();
     }
-    
-    private void sendResponse(OutputStream out, String responseBody, UserSession userSession) throws IOException {
-        String sessionCookie = "";
-        
-        // Если это новая сессия (не гостевая), устанавливаем cookie
-        if (!userSession.getUsername().equals("guest")) {
-            String sessionId = createSession(userSession);
-            sessionCookie = "Set-Cookie: sessionId=" + sessionId + "; Path=/; HttpOnly\r\n";
-        }
+
+    private boolean handleOptionsRequest(OutputStream out, Map<String, String> headers) throws IOException {
+        // Разрешаем только конкретные origins для безопасности
+        String allowOrigin = "http://localhost:3000";
         
         String response = "HTTP/1.1 200 OK\r\n" +
-                        "Content-Type: application/json\r\n" +
-                        "Access-Control-Allow-Origin: *\r\n" +
-                        "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
-                        "Access-Control-Allow-Headers: Content-Type, Cookie\r\n" +
-                        "Access-Control-Allow-Credentials: true\r\n" +
-                        sessionCookie +
-                        "Content-Length: " + responseBody.length() + "\r\n" +
-                        "\r\n" +
-                        responseBody;
+                "Access-Control-Allow-Origin: " + allowOrigin + "\r\n" +
+                "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
+                "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Cookie\r\n" +
+                "Access-Control-Allow-Credentials: true\r\n" +
+                "Access-Control-Max-Age: 3600\r\n" +
+                "Content-Length: 0\r\n" +
+                "\r\n";
         
         out.write(response.getBytes());
         out.flush();
+        return true;
     }
     
     // Обновляем processRequest для принятия userSession
     private String processRequest(String method, String path, String requestBody, 
-                                Map<String, String> headers, UserSession userSession) {
+                            Map<String, String> headers, UserSession userSession) {
         try {
             System.out.println("=== PROCESSING REQUEST ===");
             System.out.println("User: " + userSession.getUsername() + " [" + userSession.getRole() + "]");
             System.out.println("Method: " + method);
             System.out.println("Path: " + path);
-            
-            // CORS preflight
-            if ("OPTIONS".equals(method)) {
-                return "{\"success\":true}";
+            System.out.println("Headers: " + headers);            
+
+            if ("GET".equals(method) && path.startsWith("/frontend/")) {
+                return serveStaticFile(path);
             }
+            
+            System.out.println("✅ Processing regular request: " + method + " " + path);
             
             // Аутентификация
             if (path.equals("/auth/login")) {
-                return handleLogin(requestBody);
+                String loginResult = handleLogin(requestBody);
+                System.out.println("🔐 Login result: " + loginResult); // ← ДОБАВЬТЕ ЭТУ СТРОКУ
+                return loginResult;
             }
             
             if (path.equals("/auth/logout")) {
@@ -177,6 +228,22 @@ public class HttpServer {
             
             // Routing с передачей userSession
             switch (endpoint) {
+                case "/backup/create":
+                    if ("POST".equals(method)) return backupController.createBackup(userSession);
+                    break;
+                    
+                case "/backup/restore":
+                    if ("POST".equals(method)) return backupController.restoreBackup(requestBody, userSession);
+                    break;
+                    
+                case "/backup/list":
+                    if ("GET".equals(method)) return backupController.listBackups(userSession);
+                    break;
+                    
+                case "/backup/delete":
+                    if ("DELETE".equals(method)) return backupController.deleteBackup(requestBody, userSession);
+                    break;
+                    
                 case "/export/excel":
                     if ("GET".equals(method)) return exportController.exportToExcel(userSession);
                     break;
@@ -225,29 +292,47 @@ public class HttpServer {
             return "{\"success\":false,\"error\":\"ENDPOINT_NOT_FOUND\",\"message\":\"Endpoint not found: " + endpoint + "\"}";
             
         } catch (Exception e) {
+            System.out.println("Error in processRequest: " + e.getMessage());
+            e.printStackTrace();
             return "{\"success\":false,\"error\":\"REQUEST_PROCESSING_ERROR\",\"message\":\"Error processing request: " + e.getMessage() + "\"}";
         }
     }
     
-    // Обработчики аутентификации
     private String handleLogin(String requestBody) {
         try {
+            System.out.println("🔐 Login attempt with body: " + requestBody);
+            
             Map<String, Object> request = JsonUtil.parseJson(requestBody);
             String username = (String) request.get("username");
             String password = (String) request.get("password");
             
+            System.out.println("👤 Authenticating user: " + username);
+            
             UserSession userSession = authService.authenticate(username, password);
             if (userSession != null) {
-                Map<String, Object> data = new HashMap<>();
-                data.put("username", userSession.getUsername());
-                data.put("role", userSession.getRole().name());
-                data.put("displayName", userSession.getRole().getDisplayName());
+                System.out.println("✅ Login successful for: " + username);
                 
-                return "{\"success\":true,\"message\":\"Login successful\",\"data\":" + JsonUtil.toJson(data) + "}";
+                // 🔥 ПРОСТОЙ ВАРИАНТ - создаем JSON вручную
+                String response = "{" +
+                    "\"success\":true," +
+                    "\"message\":\"Login successful\"," +
+                    "\"data\":{" +
+                        "\"username\":\"" + userSession.getUsername() + "\"," +
+                        "\"role\":\"" + userSession.getRole().name() + "\"," +
+                        "\"displayName\":\"" + userSession.getRole().getDisplayName() + "\"," +
+                        "\"authenticated\":true" +
+                    "}" +
+                "}";
+                
+                System.out.println("📤 Final response: " + response);
+                return response;
             } else {
+                System.out.println("❌ Login failed for: " + username);
                 return "{\"success\":false,\"error\":\"AUTH_FAILED\",\"message\":\"Invalid username or password\"}";
             }
         } catch (Exception e) {
+            System.out.println("💥 Login error: " + e.getMessage());
+            e.printStackTrace();
             return "{\"success\":false,\"error\":\"LOGIN_ERROR\",\"message\":\"Error during login: " + e.getMessage() + "\"}";
         }
     }
@@ -372,6 +457,41 @@ public class HttpServer {
             }
         }
         return params;
+    }
+    
+    
+
+    private String serveStaticFile(String path) {
+        try {
+            // Убираем /frontend/ из пути
+            String filePath = path.substring(10);
+            if (filePath.isEmpty()) filePath = "index.html";
+            
+            File file = new File("frontend/" + filePath);
+            if (!file.exists()) {
+                return "HTTP/1.1 404 Not Found\r\n\r\nFile not found";
+            }
+
+            byte[] fileContent = Files.readAllBytes(file.toPath());
+            String contentType = getContentType(filePath);
+            
+            return "HTTP/1.1 200 OK\r\n" +
+                "Content-Type: " + contentType + "\r\n" +
+                "Content-Length: " + fileContent.length + "\r\n" +
+                "\r\n" +
+                new String(fileContent);
+        } catch (Exception e) {
+            return "HTTP/1.1 500 Error\r\n\r\nError reading file";
+        }
+    }
+
+    private String getContentType(String filePath) {
+        if (filePath.endsWith(".html")) return "text/html";
+        if (filePath.endsWith(".css")) return "text/css";
+        if (filePath.endsWith(".js")) return "application/javascript";
+        if (filePath.endsWith(".png")) return "image/png";
+        if (filePath.endsWith(".jpg")) return "image/jpeg";
+        return "text/plain";
     }
     
     public static void main(String[] args) {

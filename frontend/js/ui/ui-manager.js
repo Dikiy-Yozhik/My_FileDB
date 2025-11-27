@@ -1,7 +1,9 @@
 class UIManager {
     constructor() {
+        console.log('🔄 UIManager initializing...');
         this.elements = this.cacheDOM();
         this.bindEvents();
+        console.log('✅ UIManager ready');
     }
 
     cacheDOM() {

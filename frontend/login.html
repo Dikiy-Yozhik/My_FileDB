@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My_FileDB - Вход</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/auth.css">
+</head>
+<body class="auth-page">
+    <div class="auth-container">
+        <div class="auth-header">
+            <h1>🗃️ My_FileDB</h1>
+            <p>Файловая база данных сотрудников</p>
+        </div>
+        
+        <div class="auth-card">
+            <h2>Вход в систему</h2>
+            
+            <form id="login-form" class="auth-form">
+                <div class="form-group">
+                    <label for="username">Имя пользователя</label>
+                    <input type="text" id="username" name="username" required 
+                           placeholder="Введите имя пользователя">
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Пароль</label>
+                    <input type="password" id="password" name="password" required 
+                           placeholder="Введите пароль">
+                </div>
+                
+                <div class="form-group">
+                    <label for="role">Роль (для демо)</label>
+                    <select id="role" class="role-select">
+                        <option value="guest">Гость (только просмотр)</option>
+                        <option value="operator">Оператор (просмотр + редактирование)</option>
+                        <option value="admin">Администратор (полный доступ)</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block">Войти</button>
+            </form>
+            
+            <div class="auth-demo">
+                <h3>Демо-аккаунты:</h3>
+                <div class="demo-accounts">
+                    <div class="demo-account">
+                        <strong>Администратор</strong><br>
+                        Логин: <code>admin</code><br>
+                        Пароль: <code>admin123</code>
+                    </div>
+                    <div class="demo-account">
+                        <strong>Оператор</strong><br>
+                        Логин: <code>operator</code><br>
+                        Пароль: <code>operator123</code>
+                    </div>
+                    <div class="demo-account">
+                        <strong>Гость</strong><br>
+                        Логин: <code>guest</code><br>
+                        Пароль: <code>guest123</code>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="auth-status" class="status-message hidden"></div>
+        </div>
+    </div>
+
+    <script src="js/auth.js"></script>
+</body>
+</html>
