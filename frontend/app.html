@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My_FileDB</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; }
+        
+        .header { 
+            background: #2c3e50; color: white; padding: 1rem; 
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        
+        .container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+        
+        .card { 
+            background: white; border-radius: 8px; padding: 1.5rem; 
+            margin-bottom: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .btn { 
+            background: #3498db; color: white; border: none; padding: 0.5rem 1rem;
+            border-radius: 4px; cursor: pointer; margin: 0.25rem;
+        }
+        .btn:hover { background: #2980b9; }
+        .btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        
+        .btn-success { background: #27ae60; }
+        .btn-success:hover { background: #219a52; }
+        
+        .btn-danger { background: #e74c3c; }
+        .btn-danger:hover { background: #c0392b; }
+        
+        .status { padding: 0.5rem; border-radius: 4px; margin: 0.5rem 0; }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+        
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; font-weight: bold; }
+        
+        .form-group { margin: 1rem 0; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+        input, select { 
+            width: 100%; padding: 0.5rem; border: 1px solid #ddd; 
+            border-radius: 4px; font-size: 1rem;
+        }
+        
+        .hidden { display: none; }
+        .login-container { 
+            max-width: 400px; margin: 2rem auto; padding: 2rem;
+            background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <!-- Логин форма (показывается сначала) -->
+    <div id="login-section">
+        <div class="login-container">
+            <h1 style="text-align: center; margin-bottom: 1.5rem;">🗃️ My_FileDB</h1>
+            
+            <div id="login-status" class="status"></div>
+            
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Логин:</label>
+                    <input type="text" id="username" value="admin" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Пароль:</label>
+                    <input type="password" id="password" value="admin123" required>
+                </div>
+                
+                <button type="submit" class="btn" style="width: 100%;">Войти</button>
+            </form>
+            
+            <div style="margin-top: 1.5rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; font-size: 0.9rem;">
+                <strong>Демо-аккаунты:</strong><br>
+                • admin / admin123 (Администратор)<br>
+                • operator / operator123 (Оператор)<br>
+                • user / user123 (Пользователь)
+            </div>
+        </div>
+    </div>
+
+    <!-- Основной интерфейс (скрыт до входа) -->
+    <div id="app-section" class="hidden">
+        <div class="header">
+            <h1>🗃️ My_FileDB</h1>
+            <div>
+                <span id="user-info">Не авторизован</span>
+                <button id="logout-btn" class="btn btn-danger">Выйти</button>
+            </div>
+        </div>
+
+        <div class="container">
+            <!-- Статус -->
+            <div id="status-message" class="status"></div>
+
+            <!-- Управление БД -->
+            <div class="card">
+                <h2>Управление базой данных</h2>
+                <div class="form-group">
+                    <label>Путь к БД:</label>
+                    <input type="text" id="db-path" placeholder="data/mydatabase" value="data/mydatabase">
+                </div>
+                <button id="create-db" class="btn">Создать БД</button>
+                <button id="load-db" class="btn">Загрузить БД</button>
+                <button id="backup-db" class="btn" disabled>Создать бэкап</button>
+                <button id="export-excel" class="btn btn-success" disabled>Экспорт в Excel</button>
+                <button id="clear-db" class="btn btn-danger" disabled>Очистить БД</button>
+            </div>
+
+            <!-- Поиск -->
+            <div class="card">
+                <h2>Поиск сотрудников</h2>
+                <div style="display: flex; gap: 1rem; align-items: end;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Поиск по имени:</label>
+                        <input type="text" id="search-input" placeholder="Введите имя...">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Отдел:</label>
+                        <select id="department-filter">
+                            <option value="">Все отделы</option>
+                            <option value="IT">IT</option>
+                            <option value="HR">HR</option>
+                            <option value="Finance">Финансы</option>
+                            <option value="Marketing">Маркетинг</option>
+                        </select>
+                    </div>
+                    <button id="search-btn" class="btn">Поиск</button>
+                    <button id="clear-search" class="btn">Очистить</button>
+                </div>
+            </div>
+
+            <!-- Таблица сотрудников -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2>Сотрудники</h2>
+                    <button id="add-employee" class="btn" disabled>Добавить сотрудника</button>
+                </div>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>ФИО</th>
+                            <th>Отдел</th>
+                            <th>Должность</th>
+                            <th>Зарплата</th>
+                            <th>Дата приема</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="employees-table">
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 2rem;">
+                                Нет данных для отображения
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div style="margin-top: 1rem;">
+                    <strong id="record-count">Записей: 0</strong>
+                </div>
+            </div>
+
+            <!-- Форма сотрудника -->
+            <!-- Форма сотрудника -->
+            <div id="employee-form" class="card hidden">
+                <h2 id="form-title">Добавление сотрудника</h2>
+                <form id="employee-data-form">
+                    <input type="hidden" id="employee-id">
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <!-- 🔥 ДОБАВЛЕНО ПОЛЕ ID -->
+                        <div class="form-group">
+                            <label for="employee-id-input">ID *</label>
+                            <input type="number" id="employee-id-input" min="1" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="employee-name">ФИО *</label>
+                            <input type="text" id="employee-name" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="employee-department">Отдел *</label>
+                            <select id="employee-department" required>
+                                <option value="">Выберите отдел</option>
+                                <option value="IT">IT</option>
+                                <option value="HR">HR</option>
+                                <option value="Finance">Финансы</option>
+                                <option value="Marketing">Маркетинг</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="employee-position">Должность *</label>
+                            <input type="text" id="employee-position" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="employee-salary">Зарплата *</label>
+                            <input type="number" id="employee-salary" step="0.01" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="employee-hireDate">Дата приема *</label>
+                            <input type="date" id="employee-hireDate" required>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                        <button type="submit" class="btn">Сохранить</button>
+                        <button type="button" id="cancel-form" class="btn btn-danger">Отмена</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class SinglePageApp {
+            constructor() {
+                this.apiBase = 'http://localhost:8080';
+                this.currentUser = null;
+                this.currentToken = null; // 🔥 НОВОЕ: храним токен
+                this.currentDatabase = null;
+                this.employees = [];
+                
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.checkExistingAuth();
+            }
+
+            checkExistingAuth() {
+                const savedToken = localStorage.getItem('authToken');
+                const savedUser = localStorage.getItem('userData');
+                
+                if (savedToken && savedUser) {
+                    try {
+                        this.currentToken = savedToken;
+                        this.currentUser = JSON.parse(savedUser);
+                        console.log('✅ Restored auth from localStorage:', this.currentUser);
+                        this.showApp();
+                        this.validateToken(); // Проверяем, что токен еще валиден
+                    } catch (e) {
+                        console.error('❌ Error restoring auth:', e);
+                        this.clearAuth();
+                        this.showLogin();
+                    }
+                } else {
+                    this.showLogin();
+                }
+            }
+
+            // 🔥 НОВЫЙ МЕТОД: проверяем валидность токена на сервере
+            async validateToken() {
+                try {
+                    const response = await this.fetchAPI('/auth/status');
+                    if (response.success && response.data.authenticated) {
+                        console.log('✅ Token is valid');
+                        return true;
+                    } else {
+                        console.log('❌ Token expired');
+                        this.clearAuth();
+                        this.showLogin();
+                        return false;
+                    }
+                } catch (error) {
+                    console.error('💥 Token validation error:', error);
+                    // В случае ошибки сети оставляем локальную авторизацию
+                    return true;
+                }
+            }
+
+            async checkExistingSession() {
+                try {
+                    const response = await this.fetchAPI('/auth/status');
+                    if (response.success && response.data.authenticated) {
+                        this.currentUser = response.data;
+                        this.showApp();
+                    } else {
+                        this.showLogin();
+                    }
+                } catch (error) {
+                    this.showLogin();
+                }
+            }
+
+            setupEventListeners() {
+                // Существующие обработчики...
+                document.getElementById('login-form').addEventListener('submit', (e) => this.handleLogin(e));
+                document.getElementById('logout-btn').addEventListener('click', () => this.logout());
+                document.getElementById('create-db').addEventListener('click', () => this.createDatabase());
+                document.getElementById('load-db').addEventListener('click', () => this.loadDatabase());
+                document.getElementById('add-employee').addEventListener('click', () => this.showEmployeeForm());
+                document.getElementById('employee-data-form').addEventListener('submit', (e) => this.saveEmployee(e));
+                document.getElementById('cancel-form').addEventListener('click', () => this.hideEmployeeForm());
+                
+                // 🔥 ДОБАВЬТЕ ЭТИ НОВЫЕ ОБРАБОТЧИКИ:
+                document.getElementById('search-btn').addEventListener('click', () => this.searchEmployees());
+                document.getElementById('clear-search').addEventListener('click', () => this.clearSearch());
+                document.getElementById('export-excel').addEventListener('click', () => this.exportToExcel());
+                document.getElementById('clear-db').addEventListener('click', () => this.clearDatabase());
+                document.getElementById('backup-db').addEventListener('click', () => this.createBackup());
+            }
+
+            async handleLogin(e) {
+                e.preventDefault();
+                
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                const statusElement = document.getElementById('login-status');
+
+                if (!username || !password) {
+                    this.showLoginStatus('Заполните все поля', 'error');
+                    return;
+                }
+
+                try {
+                    this.showLoginStatus('Вход...', 'info');
+                    
+                    const response = await this.fetchAPI('/auth/login', 'POST', { 
+                        username, 
+                        password 
+                    }, false); // 🔥 false = без токена
+
+                    console.log('📊 Login response:', response);
+
+                    if (response.success) {
+                        // 🔥 СОХРАНЯЕМ ТОКЕН И ДАННЫЕ ПОЛЬЗОВАТЕЛЯ
+                        if (response.token) {
+                            this.currentToken = response.token;
+                            this.currentUser = response.data;
+                            
+                            localStorage.setItem('authToken', this.currentToken);
+                            localStorage.setItem('userData', JSON.stringify(this.currentUser));
+                            
+                            console.log('🔑 Token saved:', this.currentToken);
+                        } else {
+                            console.warn('⚠️ No token in response');
+                            this.currentUser = response.data;
+                        }
+                        
+                        this.showLoginStatus('Успешный вход!', 'success');
+                        setTimeout(() => this.showApp(), 500);
+                    } else {
+                        this.showLoginStatus(response.message || 'Ошибка входа', 'error');
+                    }
+                } catch (error) {
+                    this.showLoginStatus('Ошибка соединения с сервером', 'error');
+                    console.error('Login error:', error);
+                }
+            }
+
+            showLogin() {
+                document.getElementById('login-section').classList.remove('hidden');
+                document.getElementById('app-section').classList.add('hidden');
+            }
+
+            showApp() {
+                document.getElementById('login-section').classList.add('hidden');
+                document.getElementById('app-section').classList.remove('hidden');
+                this.updateUserInfo();
+                this.enableControls(true);
+                this.showStatus(`Добро пожаловать, ${this.currentUser.username}!`, 'success');
+            }
+
+            showLoginStatus(message, type) {
+                const element = document.getElementById('login-status');
+                element.textContent = message;
+                element.className = `status ${type}`;
+            }
+
+            showStatus(message, type = 'info') {
+                const element = document.getElementById('status-message');
+                element.textContent = message;
+                element.className = `status ${type}`;
+            }
+
+            updateUserInfo() {
+                const element = document.getElementById('user-info');
+                if (element && this.currentUser) {
+                    element.textContent = `${this.currentUser.username} (${this.currentUser.role})`;
+                }
+            }
+
+            enableControls(enabled) {
+                const controls = ['add-employee', 'backup-db', 'export-excel', 'clear-db'];
+                controls.forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) element.disabled = !enabled;
+                });
+            }
+
+            async logout() {
+                try {
+                    await this.fetchAPI('/auth/logout', 'POST');
+                } catch (error) {
+                    // Игнорируем ошибки
+                }
+                
+                this.clearAuth();
+                this.showLogin();
+            }
+
+            // 🔥 НОВЫЙ МЕТОД: очистка авторизации
+            clearAuth() {
+                this.currentUser = null;
+                this.currentToken = null;
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('userData');
+            }
+
+
+            async createDatabase() {
+                const path = document.getElementById('db-path').value || 'data/mydatabase';
+                
+                this.showStatus('Создание базы данных...', 'info');
+                try {
+                    const result = await this.fetchAPI('/database/create', 'POST', { databasePath: path });
+                    
+                    if (result.success) {
+                        this.currentDatabase = path;
+                        this.showStatus('База данных создана успешно!', 'success');
+                        await this.loadEmployees();
+                    } else {
+                        this.showStatus(`Ошибка: ${result.message}`, 'error');
+                    }
+                } catch (error) {
+                    this.showStatus('Ошибка при создании БД', 'error');
+                }
+            }
+
+            async loadDatabase() {
+                const path = document.getElementById('db-path').value || 'data/mydatabase';
+                
+                this.showStatus('Загрузка базы данных...', 'info');
+                try {
+                    const result = await this.fetchAPI('/database/load', 'POST', { databasePath: path });
+                    
+                    if (result.success) {
+                        this.currentDatabase = path;
+                        this.showStatus('База данных загружена успешно!', 'success');
+                        await this.loadEmployees();
+                    } else {
+                        this.showStatus(`Ошибка: ${result.message}`, 'error');
+                    }
+                } catch (error) {
+                    this.showStatus('Ошибка при загрузке БД', 'error');
+                }
+            }
+
+            showEmployeeForm(employee = null) {
+                const form = document.getElementById('employee-form');
+                const title = document.getElementById('form-title');
+                const formElement = document.getElementById('employee-data-form');
+                
+                if (!form || !title || !formElement) {
+                    console.error('❌ Employee form elements not found!');
+                    return;
+                }
+
+                if (employee) {
+                    title.textContent = 'Редактирование сотрудника';
+                    this.fillEmployeeForm(employee);
+                } else {
+                    title.textContent = 'Добавление сотрудника';
+                    formElement.reset();
+                    // 🔥 Автоматически генерируем ID для нового сотрудника
+                    this.generateNewEmployeeId();
+                }
+                
+                form.classList.remove('hidden');
+            }
+
+            // 🔥 НОВЫЙ МЕТОД: генерация ID для нового сотрудника
+            generateNewEmployeeId() {
+                if (this.employees.length > 0) {
+                    // Находим максимальный ID и увеличиваем на 1
+                    const maxId = Math.max(...this.employees.map(emp => emp.id));
+                    document.getElementById('employee-id-input').value = maxId + 1;
+                } else {
+                    // Если сотрудников нет, начинаем с 1
+                    document.getElementById('employee-id-input').value = 1;
+                }
+            }
+
+            hideEmployeeForm() {
+                const form = document.getElementById('employee-form');
+                if (form) {
+                    form.classList.add('hidden');
+                }
+            }
+
+            fillEmployeeForm(employee) {
+                document.getElementById('employee-id-input').value = employee.id;
+                document.getElementById('employee-name').value = employee.name;
+                document.getElementById('employee-department').value = employee.department;
+                document.getElementById('employee-position').value = employee.position;
+                document.getElementById('employee-salary').value = employee.salary;
+                document.getElementById('employee-hireDate').value = employee.hireDate;
+            }
+
+            async saveEmployee(event) {
+                event.preventDefault();
+                console.log('💾 Saving employee...');
+                
+                try {
+                    const employee = {
+                        id: parseInt(document.getElementById('employee-id-input').value),
+                        name: document.getElementById('employee-name').value,
+                        department: document.getElementById('employee-department').value,
+                        position: document.getElementById('employee-position').value,
+                        salary: parseFloat(document.getElementById('employee-salary').value),
+                        hireDate: document.getElementById('employee-hireDate').value
+                    };
+
+                    console.log('📤 Employee data:', employee);
+
+                    // 🔥 ПРОВЕРКА НА УНИКАЛЬНОСТЬ ID (только для новых сотрудников)
+                    const existingEmployee = this.employees.find(emp => emp.id === employee.id);
+                    let result;
+
+                    if (existingEmployee) {
+                        // Редактирование существующего сотрудника
+                        result = await this.fetchAPI(`/employees/${employee.id}`, 'PUT', employee);
+                    } else {
+                        // Создание нового сотрудника
+                        result = await this.fetchAPI('/employees', 'POST', employee);
+                    }
+
+                    console.log('📊 Save result:', result);
+
+                    if (result.success) {
+                        this.showStatus('Сотрудник сохранен успешно!', 'success');
+                        this.hideEmployeeForm();
+                        await this.loadEmployees();
+                    } else {
+                        this.showStatus(`Ошибка: ${result.message}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('💥 Save employee error:', error);
+                    this.showStatus('Ошибка при сохранении', 'error');
+                }
+            }
+                    
+
+            editEmployee(id) {
+                const employee = this.employees.find(emp => emp.id == id);
+                if (employee) {
+                    this.showEmployeeForm(employee);
+                }
+            }
+
+            async loadEmployees() {
+                console.log('👥 Loading employees...');
+                try {
+                    const result = await this.fetchAPI('/employees');
+                    console.log('📊 Load employees result:', result);
+                    
+                    if (result.success) {
+                        this.employees = result.data || [];
+                        this.renderEmployees();
+                        console.log('✅ Employees loaded:', this.employees.length);
+                    } else {
+                        console.error('❌ Failed to load employees:', result.message);
+                        this.showStatus(`Ошибка загрузки: ${result.message}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('💥 Load employees error:', error);
+                    this.showStatus('Ошибка при загрузке сотрудников', 'error');
+                }
+            }
+
+            async createBackup() {
+                try {
+                    this.showStatus('Создание бэкапа...', 'info');
+                    const result = await this.fetchAPI('/backup/create', 'POST');
+                    
+                    if (result.success) {
+                        this.showStatus('Бэкап создан успешно!', 'success');
+                    } else {
+                        this.showStatus(`Ошибка создания бэкапа: ${result.message}`, 'error');
+                    }
+                } catch (error) {
+                    this.showStatus('Ошибка при создании бэкапа', 'error');
+                }
+            }
+
+            // Добавьте эти методы в класс SinglePageApp после метода saveEmployee
+
+            async deleteEmployee(id) {
+                if (!confirm('Вы уверены, что хотите удалить этого сотрудника?')) {
+                    return;
+                }
+
+                try {
+                    const result = await this.fetchAPI(`/employees/${id}`, 'DELETE');
+                    
+                    if (result.success) {
+                        this.showStatus('Сотрудник удален успешно!', 'success');
+                        await this.loadEmployees();
+                    } else {
+                        this.showStatus(`Ошибка: ${result.message}`, 'error');
+                    }
+                } catch (error) {
+                    this.showStatus('Ошибка при удалении сотрудника', 'error');
+                }
+            }
+
+            async searchEmployees() {
+                const name = document.getElementById('search-input').value;
+                const department = document.getElementById('department-filter').value;
+                
+                const queryParams = new URLSearchParams();
+                if (name) queryParams.append('name', name);
+                if (department) queryParams.append('department', department);
+                
+                try {
+                    const result = await this.fetchAPI(`/employees?${queryParams.toString()}`);
+                    
+                    if (result.success) {
+                        this.employees = result.data || [];
+                        this.renderEmployees();
+                        this.showStatus(`Найдено записей: ${this.employees.length}`, 'info');
+                    } else {
+                        this.showStatus(`Ошибка поиска: ${result.message}`, 'error');
+                    }
+                } catch (error) {
+                    this.showStatus('Ошибка при поиске', 'error');
+                }
+            }
+
+            async clearSearch() {
+                document.getElementById('search-input').value = '';
+                document.getElementById('department-filter').value = '';
+                await this.loadEmployees();
+            }
+
+            async exportToExcel() {
+                try {
+                    this.showStatus('Экспорт данных...', 'info');
+                    const result = await this.fetchAPI('/export/excel');
+                    
+                    if (result.success) {
+                        this.showStatus('Экспорт завершен успешно!', 'success');
+                        
+                        // 🔥 АВТОМАТИЧЕСКОЕ СКАЧИВАНИЕ ФАЙЛА
+                        if (result.data && result.data.filePath) {
+                            // Создаем временную ссылку для скачивания
+                            const filePath = result.data.filePath;
+                            const fileName = result.data.fileName || 'export.csv';
+                            
+                            // Запрашиваем файл и создаем blob для скачивания
+                            const response = await fetch(`${this.apiBase}/export/download?file=${encodeURIComponent(filePath)}`);
+                            const blob = await response.blob();
+                            
+                            // Создаем ссылку для скачивания
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = fileName;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            window.URL.revokeObjectURL(url);
+                        }
+                    } else {
+                        this.showStatus(`Ошибка экспорта: ${result.message}`, 'error');
+                    }
+                } catch (error) {
+                    this.showStatus('Ошибка при экспорте', 'error');
+                    console.error('Export error:', error);
+                }
+            }
+
+            async clearDatabase() {
+                if (!confirm('ВНИМАНИЕ! Вы уверены, что хотите полностью очистить базу данных? Это действие нельзя отменить.')) {
+                    return;
+                }
+
+                try {
+                    const result = await this.fetchAPI('/database/clear', 'DELETE');
+                    
+                    if (result.success) {
+                        this.showStatus('База данных очищена успешно!', 'success');
+                        await this.loadEmployees();
+                    } else {
+                        this.showStatus(`Ошибка: ${result.message}`, 'error');
+                    }
+                } catch (error) {
+                    this.showStatus('Ошибка при очистке БД', 'error');
+                }
+            }
+
+            renderEmployees() {
+                const tbody = document.getElementById('employees-table');
+                const countElement = document.getElementById('record-count');
+                
+                if (this.employees.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 2rem;">
+                                Нет данных для отображения
+                            </td>
+                        </tr>
+                    `;
+                    if (countElement) countElement.textContent = 'Записей: 0';
+                    return;
+                }
+
+                tbody.innerHTML = this.employees.map(emp => `
+                    <tr>
+                        <td>${emp.id}</td>
+                        <td>${emp.name}</td>
+                        <td>${emp.department}</td>
+                        <td>${emp.position}</td>
+                        <td>${emp.salary}</td>
+                        <td>${emp.hireDate}</td>
+                        <td>
+                            <button class="btn" onclick="app.editEmployee(${emp.id})">✏️</button>
+                            <button class="btn btn-danger" onclick="app.deleteEmployee(${emp.id})">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('');
+
+                if (countElement) countElement.textContent = `Записей: ${this.employees.length}`;
+            }
+
+            // Остальные методы (showEmployeeForm, hideEmployeeForm, saveEmployee, editEmployee, deleteEmployee, searchEmployees, clearSearch)
+            // остаются такими же как в вашем оригинальном simple-app.js
+
+            async fetchAPI(endpoint, method = 'GET', data = null, useToken = true) {
+                const options = {
+                    method,
+                    headers: { 
+                        'Content-Type': 'application/json',
+                    },
+                    // 🔥 УБИРАЕМ credentials: 'include' - они нам не нужны с токенами
+                    // credentials: 'include'
+                };
+
+                // Добавляем токен в заголовок
+                if (useToken && this.currentToken) {
+                    options.headers['Authorization'] = `Bearer ${this.currentToken}`;
+                    console.log('🔑 Sending token in header:', this.currentToken);
+                }
+
+                if (data && (method === 'POST' || method === 'PUT')) {
+                    options.body = JSON.stringify(data);
+                }
+
+                console.log(`🌐 API Call: ${method} ${endpoint}`, options);
+
+                try {
+                    const response = await fetch(`${this.apiBase}${endpoint}`, options);
+                    const result = await response.json();
+                    console.log(`📨 API Response:`, result);
+                    return result;
+                } catch (error) {
+                    console.error(`💥 API Error (${endpoint}):`, error);
+                    throw error;
+                }
+            }
+        }
+
+        // Инициализация
+        let app;
+        document.addEventListener('DOMContentLoaded', () => {
+            app = new SinglePageApp();
+            window.app = app;
+        });
+    </script>
+</body>
+</html>

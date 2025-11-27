@@ -25,10 +25,9 @@ public class ExportController {
     public String exportToExcel(UserSession session) {
         try {
             if (!session.canExportToExcel()) {
-                return "{\"success\":false,\"error\":\"ACCESS_DENIED\",\"message\":\"Недостаточно прав для экспорта в Excel. Требуется роль: Администратор или Оператор\"}";
+                return "{\"success\":false,\"error\":\"ACCESS_DENIED\",\"message\":\"Недостаточно прав для экспорта. Требуется роль: Администратор или Оператор\"}";
             }
             
-            // Проверяем что БД загружена
             if (!databaseController.isDatabaseLoaded()) {
                 return "{\"success\":false,\"error\":\"NO_DATABASE_LOADED\",\"message\":\"No database is currently loaded\"}";
             }
@@ -44,29 +43,32 @@ public class ExportController {
             String databaseName = getCurrentDatabaseName();
             String fileName = excelExporter.generateFileName(databaseName);
             
-            // Экспортируем в Excel
+            // Экспортируем в CSV
             String filePath = excelExporter.exportToExcel(employees, fileName);
             
             // Проверяем что файл создан
             File exportedFile = new File(filePath);
             if (!exportedFile.exists()) {
-                return "{\"success\":false,\"error\":\"EXPORT_FAILED\",\"message\":\"Не удалось создать файл Excel\"}";
+                return "{\"success\":false,\"error\":\"EXPORT_FAILED\",\"message\":\"Не удалось создать файл\"}";
             }
             
             Map<String, Object> data = new HashMap<>();
             data.put("filePath", filePath);
-            data.put("fileName", fileName + ".xlsx");
+            data.put("fileName", new File(filePath).getName());
             data.put("recordCount", employees.size());
             data.put("fileSize", exportedFile.length());
+            data.put("format", "CSV"); // Указываем что это CSV
             
             SuccessResponse<Map<String, Object>> response = new SuccessResponse<>(
-                "Данные успешно экспортированы в Excel",
+                "Данные успешно экспортированы в CSV",
                 data
             );
             
             return JsonUtil.toJson(response);
             
         } catch (Exception e) {
+            System.out.println("Export error: " + e.getMessage());
+            e.printStackTrace();
             return handleException(e);
         }
     }

@@ -254,18 +254,57 @@ public class EmployeeController {
         }
     }
     
-    // Вспомогательные методы
-    
     private EmployeeRequest parseEmployeeRequest(String json) {
         Map<String, Object> map = JsonUtil.parseJson(json);
         EmployeeRequest request = new EmployeeRequest();
         
-        if (map.containsKey("id")) request.setId(((Number) map.get("id")).intValue());
+        System.out.println("=== PARSING EMPLOYEE REQUEST ===");
+        System.out.println("Raw map: " + map);
+        
+        // 🔥 ИСПРАВЛЕНИЕ: проверяем на null перед преобразованием
+        if (map.containsKey("id") && map.get("id") != null) {
+            Object idObj = map.get("id");
+            System.out.println("ID object: " + idObj + " (type: " + idObj.getClass() + ")");
+            if (idObj instanceof Number) {
+                request.setId(((Number) idObj).intValue());
+            } else if (idObj instanceof String) {
+                try {
+                    request.setId(Integer.parseInt((String) idObj));
+                } catch (NumberFormatException e) {
+                    System.out.println("Warning: Invalid ID format: " + idObj);
+                }
+            }
+        } else {
+            System.out.println("ID is null or missing - this is a new employee");
+            // Для новых сотрудников ID будет null
+            request.setId(null);
+        }
+        
         if (map.containsKey("name")) request.setName((String) map.get("name"));
         if (map.containsKey("department")) request.setDepartment((String) map.get("department"));
         if (map.containsKey("position")) request.setPosition((String) map.get("position"));
-        if (map.containsKey("salary")) request.setSalary(((Number) map.get("salary")).floatValue());
+        
+        // 🔥 ИСПРАВЛЕНИЕ для salary
+        if (map.containsKey("salary") && map.get("salary") != null) {
+            Object salaryObj = map.get("salary");
+            System.out.println("Salary object: " + salaryObj + " (type: " + salaryObj.getClass() + ")");
+            if (salaryObj instanceof Number) {
+                request.setSalary(((Number) salaryObj).floatValue());
+            } else if (salaryObj instanceof String) {
+                try {
+                    request.setSalary(Float.parseFloat((String) salaryObj));
+                } catch (NumberFormatException e) {
+                    throw new DatabaseException("INVALID_SALARY", "Invalid salary format: " + salaryObj);
+                }
+            }
+        }
+        
         if (map.containsKey("hireDate")) request.setHireDate((String) map.get("hireDate"));
+        
+        System.out.println("Parsed request: " + request);
+        System.out.println("ID: " + request.getId());
+        System.out.println("Name: " + request.getName());
+        System.out.println("Salary: " + request.getSalary());
         
         return request;
     }
@@ -285,9 +324,14 @@ public class EmployeeController {
     }
     
     private void validateEmployeeRequest(EmployeeRequest request) {
-        if (request.getId() == null) {
-            throw new DatabaseException("MISSING_REQUIRED_FIELD", "ID is required");
-        }
+        System.out.println("=== VALIDATING EMPLOYEE REQUEST ===");
+        System.out.println("Request to validate: " + request);
+        
+        // 🔥 ИСПРАВЛЕНИЕ: для новых сотрудников ID может быть null
+        // if (request.getId() == null) {  // ← УБЕРИТЕ ЭТУ ПРОВЕРКУ
+        //     throw new DatabaseException("MISSING_REQUIRED_FIELD", "ID is required");
+        // }
+        
         if (request.getName() == null || request.getName().trim().isEmpty()) {
             throw new DatabaseException("MISSING_REQUIRED_FIELD", "Name is required");
         }
@@ -305,23 +349,38 @@ public class EmployeeController {
         }
         
         // Используем ValidationUtil для детальной валидации
-        ValidationUtil.validateEmployeeId(request.getId());
+        // 🔥 ИСПРАВЛЕНИЕ: пропускаем валидацию ID если он null (новый сотрудник)
+        if (request.getId() != null) {
+            ValidationUtil.validateEmployeeId(request.getId());
+        }
         ValidationUtil.validateName(request.getName());
         ValidationUtil.validateDepartment(request.getDepartment());
         ValidationUtil.validatePosition(request.getPosition());
         ValidationUtil.validateSalary(request.getSalary());
+        
+        System.out.println("✅ Validation passed");
     }
     
     private Employee convertToEntity(EmployeeRequest request) {
+        System.out.println("=== CONVERTING TO ENTITY ===");
+        System.out.println("Request: " + request);
+        
         LocalDate hireDate = ValidationUtil.parseDate(request.getHireDate());
-        return new Employee(
-            request.getId(),
+        
+        // 🔥 ИСПРАВЛЕНИЕ: для новых сотрудников создаем с ID = -1
+        int employeeId = (request.getId() != null) ? request.getId() : -1;
+        
+        Employee employee = new Employee(
+            employeeId,  // Используем -1 для новых сотрудников
             request.getName(),
             request.getDepartment(),
             request.getPosition(),
             request.getSalary(),
             hireDate
         );
+        
+        System.out.println("Created employee: " + employee);
+        return employee;
     }
     
     private EmployeeResponse convertToResponse(Employee employee) {

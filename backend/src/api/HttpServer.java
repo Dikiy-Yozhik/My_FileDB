@@ -14,17 +14,9 @@ import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 
-
 public class HttpServer {
-    private final int port;
-    private ServerSocket serverSocket;
-    private boolean isRunning;
-    private final DatabaseController databaseController;
-    private final EmployeeController employeeController;
-    private final AuthService authService;
     private final Map<String, UserSession> sessions; // Хранилище сессий
-    private final ExportController exportController;
-    private final BackupController backupController;
+    private final Map<String, String> tokenToSessionId; // Токен -> SessionId
     
     public HttpServer(int port) {
         this.port = port;
@@ -32,20 +24,128 @@ public class HttpServer {
         this.employeeController = new EmployeeController(databaseController);
         this.authService = new AuthService();
         this.sessions = new HashMap<>();
+        this.tokenToSessionId = new HashMap<>(); // 🔥 НОВОЕ: хранилище токенов
         this.exportController = new ExportController(databaseController);
         this.backupController = new BackupController(databaseController);
     }
     
-    // Добавляем методы для работы с сессиями
+    // 🔥 ИЗМЕНЯЕМ: создаем токен вместо cookie
     private String createSession(UserSession userSession) {
         String sessionId = generateSessionId();
+        String token = generateToken();
         sessions.put(sessionId, userSession);
-        return sessionId;
+        tokenToSessionId.put(token, sessionId); // 🔥 Связываем токен с сессией
+        return token; // 🔥 Возвращаем токен, а не sessionId
     }
     
-    private UserSession getSession(String sessionId) {
-        return sessions.get(sessionId);
+    private String generateToken() {
+        return "token_" + java.util.UUID.randomUUID().toString();
     }
+    
+    // 🔥 НОВЫЙ МЕТОД: получение сессии по токену
+    private UserSession getSessionByToken(String token) {
+        String sessionId = tokenToSessionId.get(token);
+        if (sessionId != null) {
+            return sessions.get(sessionId);
+        }
+        return null;
+    }
+    
+    // 🔥 ИЗМЕНЯЕМ: получаем сессию из заголовка Authorization
+    private UserSession getUserSession(Map<String, String> headers) {
+        String authHeader = headers.get("Authorization");
+        System.out.println("🔑 Authorization header: " + authHeader);
+        
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            System.out.println("🔍 Found token: " + token);
+            UserSession session = getSessionByToken(token);
+            if (session != null) {
+                System.out.println("✅ Valid session found for: " + session.getUsername());
+                return session;
+            } else {
+                System.out.println("❌ Invalid or expired token: " + token);
+            }
+        }
+        
+        System.out.println("👤 No valid token found, returning null");
+        return null;
+    }
+
+    private void sendResponse(OutputStream out, String responseBody, UserSession userSession, String method, Map<String, String> headers) throws IOException {
+        String allowOrigin = "http://localhost:3000";
+        
+        // 🔥 УБИРАЕМ эту логику - токен уже создан в handleLogin
+        // String responseWithToken = responseBody;
+        // if (userSession != null && !userSession.getUsername().equals("guest") && responseBody.contains("Login successful")) {
+        //     // ... создание токена ...
+        // }
+        
+        byte[] responseBytes = responseBody.getBytes("UTF-8"); // <- используем оригинальный responseBody
+        
+        String response = "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: application/json; charset=utf-8\r\n" +
+                        "Access-Control-Allow-Origin: " + allowOrigin + "\r\n" +
+                        "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
+                        "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n" +
+                        "Access-Control-Allow-Credentials: true\r\n" +
+                        "Access-Control-Max-Age: 3600\r\n" +
+                        "Content-Length: " + responseBytes.length + "\r\n" +
+                        "\r\n";
+        
+        out.write(response.getBytes("UTF-8"));
+        out.write(responseBytes);
+        out.flush();
+        System.out.println("✅ Response sent successfully! Length: " + responseBytes.length);
+    }
+
+    private boolean handleOptionsRequest(OutputStream out, Map<String, String> headers) throws IOException {
+        // 🔥 ФИКСИРУЕМ ORIGIN ДЛЯ OPTIONS
+        String allowOrigin = "http://localhost:3000";
+        
+        String response = "HTTP/1.1 200 OK\r\n" +
+                "Access-Control-Allow-Origin: " + allowOrigin + "\r\n" +
+                "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
+                "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n" +
+                "Access-Control-Allow-Credentials: true\r\n" + // 🔥 ДОБАВЛЯЕМ ЭТУ СТРОКУ
+                "Access-Control-Max-Age: 3600\r\n" +
+                "Content-Length: 0\r\n" +
+                "\r\n";
+        
+        out.write(response.getBytes());
+        out.flush();
+        return true;
+    }
+
+    private void sendErrorResponse(OutputStream out, String errorBody) throws IOException {
+        // 🔥 ДОБАВЛЯЕМ CORS В ОШИБОЧНЫЕ ОТВЕТЫ
+        String response = "HTTP/1.1 500 Internal Server Error\r\n" +
+                        "Content-Type: application/json\r\n" +
+                        "Access-Control-Allow-Origin: http://localhost:3000\r\n" +
+                        "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
+                        "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n" +
+                        "Access-Control-Allow-Credentials: true\r\n" +
+                        "Content-Length: " + errorBody.length() + "\r\n" +
+                        "\r\n" +
+                        errorBody;
+        
+        out.write(response.getBytes());
+        out.flush();
+    }
+
+    private final int port;
+    private ServerSocket serverSocket;
+    private boolean isRunning;
+    private final DatabaseController databaseController;
+    private final EmployeeController employeeController;
+    private final AuthService authService;
+    private final ExportController exportController;
+    private final BackupController backupController;
+    
+    
+    // private UserSession getSession(String sessionId) {
+    //     return sessions.get(sessionId);
+    // }
     
     private String generateSessionId() {
         return java.util.UUID.randomUUID().toString();
@@ -108,97 +208,7 @@ public class HttpServer {
         } finally {
             clientSocket.close();
         }
-    }
-
-    private void sendResponse(OutputStream out, String responseBody, UserSession userSession, String method, Map<String, String> headers) throws IOException {
-        String origin = headers.getOrDefault("Origin", "http://localhost:3000");
-        String allowOrigin = origin.equals("null") ? "http://localhost:3000" : origin;
-        
-        String sessionCookie = "";
-        if (userSession != null && !userSession.getUsername().equals("guest")) {
-            String sessionId = createSession(userSession);
-            // 🔥 ИСПРАВЛЯЕМ cookie - убираем SameSite=None для localhost
-            sessionCookie = "Set-Cookie: sessionId=" + sessionId + "; Path=/; HttpOnly; Max-Age=3600\r\n";
-            System.out.println("🍪 Setting session cookie: " + sessionId + " for user: " + userSession.getUsername());
-        }
-        
-        byte[] responseBytes = responseBody.getBytes("UTF-8");
-        
-        String response = "HTTP/1.1 200 OK\r\n" +
-                        "Content-Type: application/json; charset=utf-8\r\n" +
-                        "Access-Control-Allow-Origin: " + allowOrigin + "\r\n" +
-                        "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
-                        "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Cookie\r\n" +
-                        "Access-Control-Allow-Credentials: true\r\n" +
-                        "Access-Control-Max-Age: 3600\r\n" +
-                        sessionCookie +
-                        "Content-Length: " + responseBytes.length + "\r\n" +
-                        "\r\n";
-        
-        out.write(response.getBytes("UTF-8"));
-        out.write(responseBytes);
-        out.flush();
-        System.out.println("✅ Response sent successfully! Length: " + responseBytes.length);
-    }
-
-    private void sendErrorResponse(OutputStream out, String errorBody) throws IOException {
-        String response = "HTTP/1.1 500 Internal Server Error\r\n" +
-                        "Content-Type: application/json\r\n" +
-                        "Access-Control-Allow-Origin: http://localhost:3000\r\n" +
-                        "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
-                        "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Cookie\r\n" +
-                        "Access-Control-Allow-Credentials: true\r\n" +
-                        "Content-Length: " + errorBody.length() + "\r\n" +
-                        "\r\n" +
-                        errorBody;
-        
-        out.write(response.getBytes());
-        out.flush();
-    }
-    
-    private UserSession getUserSession(Map<String, String> headers) {
-        String cookieHeader = headers.get("Cookie");
-        System.out.println("🍪 Cookie header: " + cookieHeader);
-        
-        if (cookieHeader != null) {
-            for (String cookie : cookieHeader.split(";")) {
-                String[] parts = cookie.trim().split("=");
-                if (parts.length == 2 && "sessionId".equals(parts[0])) {
-                    String sessionId = parts[1];
-                    System.out.println("🔍 Found sessionId: " + sessionId);
-                    UserSession session = getSession(sessionId);
-                    if (session != null) {
-                        System.out.println("✅ Valid session found for: " + session.getUsername());
-                        return session;
-                    } else {
-                        System.out.println("❌ Invalid or expired session: " + sessionId);
-                    }
-                }
-            }
-        }
-        
-        // 🔥 ВАЖНОЕ ИСПРАВЛЕНИЕ: возвращаем null вместо гостевой сессии
-        System.out.println("👤 No valid session found, returning null");
-        return null;
-}
-
-    private boolean handleOptionsRequest(OutputStream out, Map<String, String> headers) throws IOException {
-        // Разрешаем только конкретные origins для безопасности
-        String allowOrigin = "http://localhost:3000";
-        
-        String response = "HTTP/1.1 200 OK\r\n" +
-                "Access-Control-Allow-Origin: " + allowOrigin + "\r\n" +
-                "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
-                "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Cookie\r\n" +
-                "Access-Control-Allow-Credentials: true\r\n" +
-                "Access-Control-Max-Age: 3600\r\n" +
-                "Content-Length: 0\r\n" +
-                "\r\n";
-        
-        out.write(response.getBytes());
-        out.flush();
-        return true;
-    }
+    }  
 
     // 🔥 Метод для проверки, требует ли endpoint авторизации
     private boolean requiresAuthentication(String path) {
@@ -231,7 +241,11 @@ public class HttpServer {
                 System.out.println("User: NOT AUTHENTICATED");
             }
 
-            // 🔥 ПРОВЕРКА АВТОРИЗАЦИИ ДЛЯ ЗАЩИЩЕННЫХ ENDPOINT'ОВ
+            // 🔥 ОТЛАДОЧНАЯ ИНФОРМАЦИЯ
+            System.out.println("🔑 Authorization: " + headers.get("Authorization"));
+            System.out.println("👤 User session: " + (userSession != null ? userSession.getUsername() : "null"));
+            
+            // ПРОВЕРКА АВТОРИЗАЦИИ
             if (requiresAuthentication(path) && !isAuthenticated(userSession)) {
                 System.out.println("🚫 Unauthorized access attempt to: " + path);
                 return "{\"success\":false,\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}";
@@ -295,7 +309,7 @@ public class HttpServer {
                 case "/export/download":
                     if ("GET".equals(method)) {
                         String filePath = queryParams.get("file");
-                        return exportController.downloadExcel(filePath, userSession);
+                        return serveFileDownload(filePath, userSession);
                     }
                     break;
 
@@ -337,6 +351,31 @@ public class HttpServer {
             return "{\"success\":false,\"error\":\"REQUEST_PROCESSING_ERROR\",\"message\":\"Error processing request: " + e.getMessage() + "\"}";
         }
     }
+
+    private String serveFileDownload(String filePath, UserSession userSession) {
+        try {
+            if (!isAuthenticated(userSession)) {
+                return "{\"success\":false,\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}";
+            }
+            
+            File file = new File(filePath);
+            if (!file.exists()) {
+                return "{\"success\":false,\"error\":\"FILE_NOT_FOUND\",\"message\":\"File not found: " + filePath + "\"}";
+            }
+        
+            Map<String, Object> fileInfo = new HashMap<>();
+            fileInfo.put("filePath", filePath);
+            fileInfo.put("fileName", file.getName());
+            fileInfo.put("fileSize", file.length());
+            fileInfo.put("downloadUrl", "file://" + file.getAbsolutePath());
+            fileInfo.put("message", "Файл готов к скачиванию. Путь: " + file.getAbsolutePath());
+            
+            return "{\"success\":true,\"data\":" + JsonUtil.toJson(fileInfo) + "}";
+            
+        } catch (Exception e) {
+            return "{\"success\":false,\"error\":\"DOWNLOAD_ERROR\",\"message\":\"Error serving file: " + e.getMessage() + "\"}";
+        }
+    }
     
     private String handleLogin(String requestBody) {
         try {
@@ -352,14 +391,15 @@ public class HttpServer {
             if (userSession != null) {
                 System.out.println("✅ Login successful for: " + username);
                 
-                // 🔥 ВАЖНО: СОЗДАЕМ СЕССИЮ!
-                String sessionId = createSession(userSession);
-                System.out.println("🔑 Session created: " + sessionId);
+                // 🔥 СОЗДАЕМ СЕССИЮ И ПОЛУЧАЕМ ТОКЕН
+                String token = createSession(userSession);
+                System.out.println("🔑 Token created: " + token);
                 
-                // 🔥 ПРОСТОЙ ВАРИАНТ - создаем JSON вручную
+                // 🔥 ДОБАВЛЯЕМ ТОКЕН В ОТВЕТ!
                 String response = "{" +
                     "\"success\":true," +
                     "\"message\":\"Login successful\"," +
+                    "\"token\":\"" + token + "\"," +  // <- ДОБАВЬТЕ ЭТУ СТРОКУ
                     "\"data\":{" +
                         "\"username\":\"" + userSession.getUsername() + "\"," +
                         "\"role\":\"" + userSession.getRole().name() + "\"," +
@@ -368,7 +408,7 @@ public class HttpServer {
                     "}" +
                 "}";
                 
-                System.out.println("📤 Final response: " + response);
+                System.out.println("📤 Final response with token: " + response);
                 return response;
             } else {
                 System.out.println("❌ Login failed for: " + username);
